@@ -37,6 +37,7 @@ const player = {
   power: 1,
   weapon: 'cannon',
   fireCooldown: 0,
+  missileCooldown: 0,
   invuln: 0,
   respawnTimer: 0,
 };
@@ -157,6 +158,7 @@ function resetGame() {
   player.power = 1;
   player.weapon = 'cannon';
   player.fireCooldown = 0;
+  player.missileCooldown = 0;
   player.invuln = 120;
   player.respawnTimer = 0;
 }
@@ -264,6 +266,34 @@ function enemyShoot(enemy, pattern = 'spread') {
     const angle = (-spread / 2) + spread * t + Math.PI / 2;
     const speed = pattern === 'wide' ? 2.6 : 3.1;
     state.enemyBullets.push({ x: enemy.x, y: enemy.y + 12, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: pattern === 'wide' ? 5 : 4, color: pattern === 'wide' ? '#ff4fd8' : '#ff965d', damage: 10 });
+  }
+}
+
+function nearestEnemy(x, y) {
+  let best = null;
+  let bestD = Infinity;
+  for (const e of state.enemies) {
+    const d = Math.hypot(e.x - x, e.y - y);
+    if (d < bestD) { bestD = d; best = e; }
+  }
+  return best;
+}
+
+function fireMissiles() {
+  const offsets = player.power >= 3 ? [-14, 14] : [0];
+  for (const off of offsets) {
+    const target = nearestEnemy(player.x + off, player.y - 20);
+    state.bullets.push({
+      x: player.x + off,
+      y: player.y - 8,
+      vx: 0,
+      vy: -5,
+      kind: 'missile',
+      target,
+      r: 4,
+      damage: 18,
+      color: '#ffb347',
+    });
   }
 }
 
@@ -379,6 +409,7 @@ function update() {
   player.y = clamp(player.y, 40, H - 40);
 
   if (player.fireCooldown > 0) player.fireCooldown -= 1;
+  if (player.missileCooldown > 0) player.missileCooldown -= 1;
   if (player.invuln > 0) player.invuln -= 1;
   if (player.respawnTimer > 0) player.respawnTimer -= 1;
 
@@ -388,6 +419,10 @@ function update() {
     if (player.weapon === 'cannon') player.fireCooldown = Math.max(4, 8 - player.power);
     else if (player.weapon === 'spread') player.fireCooldown = 10;
     else player.fireCooldown = 7;
+  }
+  if (state.scene === 'playing' && player.missileCooldown <= 0 && state.enemies.length > 0) {
+    fireMissiles();
+    player.missileCooldown = 42;
   }
 
   if (!state.bossSpawned) {
@@ -401,6 +436,19 @@ function update() {
   }
 
   for (const b of state.bullets) {
+    if (b.kind === 'missile') {
+      if (b.target && !b.target.dead) {
+        const dx = b.target.x - b.x;
+        const dy = b.target.y - b.y;
+        const len = Math.hypot(dx, dy) || 1;
+        b.vx += (dx / len) * 0.35;
+        b.vy += (dy / len) * 0.35;
+        const sp = Math.hypot(b.vx, b.vy) || 1;
+        const max = 6.2;
+        b.vx = (b.vx / sp) * Math.min(sp, max);
+        b.vy = (b.vy / sp) * Math.min(sp, max);
+      }
+    }
     b.x += b.vx;
     b.y += b.vy;
   }
@@ -733,11 +781,18 @@ function render() {
   }
 
   for (const p of state.pickups) {
+    const pulse = 1 + Math.sin(state.time * 0.12 + p.y * 0.02) * 0.18;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(pulse, pulse);
     ctx.fillStyle = p.kind === 'power' ? '#7cff72' : p.kind === 'bomb' ? '#ffd44d' : (p.weapon === 'spread' ? '#7dff8f' : '#ff5ad9');
-    ctx.fillRect(p.x - 8, p.y - 8, 16, 16);
+    ctx.fillRect(-8, -8, 16, 16);
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.strokeRect(-10, -10, 20, 20);
     ctx.fillStyle = '#111';
     const label = p.kind === 'power' ? 'P' : p.kind === 'bomb' ? 'B' : (p.weapon === 'spread' ? 'S' : 'L');
-    ctx.fillText(label, p.x - 4, p.y + 4);
+    ctx.fillText(label, -4, 4);
+    ctx.restore();
   }
 
   for (const b of state.bullets) {
@@ -746,6 +801,13 @@ function render() {
       ctx.fillRect(b.x - 2, b.y - 20, 4, 24);
       ctx.fillStyle = '#ffd2ff';
       ctx.fillRect(b.x - 1, b.y - 20, 2, 24);
+    } else if (b.kind === 'missile') {
+      ctx.fillStyle = '#ffb347';
+      ctx.fillRect(b.x - 3, b.y - 6, 6, 12);
+      ctx.fillStyle = '#fff0b3';
+      ctx.fillRect(b.x - 1, b.y - 4, 2, 6);
+      ctx.fillStyle = '#ff6a3d';
+      ctx.fillRect(b.x - 2, b.y + 6, 4, 4);
     } else {
       ctx.fillRect(b.x - b.r / 2, b.y - b.r * 2, b.r, b.r * 3);
     }
