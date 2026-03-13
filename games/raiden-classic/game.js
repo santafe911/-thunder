@@ -246,6 +246,23 @@ function shootPlayer() {
         tall: true,
       });
     }
+  } else if (player.weapon === 'homing') {
+    const count = player.power >= 3 ? 3 : 2;
+    for (let i = 0; i < count; i++) {
+      const off = (i - (count - 1) / 2) * 10;
+      const target = nearestEnemy(player.x + off, player.y - 20);
+      state.bullets.push({
+        x: player.x + off,
+        y: player.y - 14,
+        vx: off * 0.05,
+        vy: -4.5,
+        kind: 'homing',
+        target,
+        r: 4,
+        damage: 15,
+        color: '#7fd4ff',
+      });
+    }
   }
   playSfx('shoot');
 }
@@ -424,7 +441,8 @@ function update() {
     shootPlayer();
     if (player.weapon === 'cannon') player.fireCooldown = Math.max(4, 8 - player.power);
     else if (player.weapon === 'spread') player.fireCooldown = 10;
-    else player.fireCooldown = 7;
+    else if (player.weapon === 'laser') player.fireCooldown = 7;
+    else player.fireCooldown = 12;
   }
   if (state.scene === 'playing' && player.missileCooldown <= 0 && state.enemies.length > 0) {
     fireMissiles();
@@ -444,15 +462,15 @@ function update() {
   }
 
   for (const b of state.bullets) {
-    if (b.kind === 'missile') {
+    if (b.kind === 'missile' || b.kind === 'homing') {
       if (b.target && !b.target.dead) {
         const dx = b.target.x - b.x;
         const dy = b.target.y - b.y;
         const len = Math.hypot(dx, dy) || 1;
-        b.vx += (dx / len) * 0.35;
-        b.vy += (dy / len) * 0.35;
+        b.vx += (dx / len) * (b.kind === 'homing' ? 0.5 : 0.35);
+        b.vy += (dy / len) * (b.kind === 'homing' ? 0.5 : 0.35);
         const sp = Math.hypot(b.vx, b.vy) || 1;
-        const max = 6.2;
+        const max = b.kind === 'homing' ? 7.2 : 6.2;
         b.vx = (b.vx / sp) * Math.min(sp, max);
         b.vy = (b.vy / sp) * Math.min(sp, max);
       }
@@ -579,7 +597,9 @@ function update() {
             const roll = Math.random();
             if (roll > 0.82) kind = 'bomb';
             else if (roll > 0.58) kind = 'weapon';
-            state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind, weapon: Math.random() > 0.5 ? 'spread' : 'laser' });
+            const weaponRoll = Math.random();
+            const weapon = weaponRoll > 0.66 ? 'spread' : weaponRoll > 0.33 ? 'laser' : 'homing';
+            state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind, weapon });
           }
           playSfx('explode');
           if (e.type === 'boss') {
@@ -826,12 +846,12 @@ function render() {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.scale(pulse, pulse);
-    ctx.fillStyle = p.kind === 'power' ? '#7cff72' : p.kind === 'bomb' ? '#ffd44d' : (p.weapon === 'spread' ? '#7dff8f' : '#ff5ad9');
+    ctx.fillStyle = p.kind === 'power' ? '#7cff72' : p.kind === 'bomb' ? '#ffd44d' : (p.weapon === 'spread' ? '#7dff8f' : p.weapon === 'laser' ? '#ff5ad9' : '#7fd4ff');
     ctx.fillRect(-8, -8, 16, 16);
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
     ctx.strokeRect(-10, -10, 20, 20);
     ctx.fillStyle = '#111';
-    const label = p.kind === 'power' ? 'P' : p.kind === 'bomb' ? 'B' : (p.weapon === 'spread' ? 'S' : 'L');
+    const label = p.kind === 'power' ? 'P' : p.kind === 'bomb' ? 'B' : (p.weapon === 'spread' ? 'S' : p.weapon === 'laser' ? 'L' : 'H');
     ctx.fillText(label, -4, 4);
     ctx.restore();
   }
@@ -849,6 +869,13 @@ function render() {
       ctx.fillRect(b.x - 1, b.y - 4, 2, 6);
       ctx.fillStyle = '#ff6a3d';
       ctx.fillRect(b.x - 2, b.y + 6, 4, 4);
+    } else if (b.kind === 'homing') {
+      ctx.fillStyle = '#7fd4ff';
+      ctx.fillRect(b.x - 3, b.y - 5, 6, 10);
+      ctx.fillStyle = '#d9f7ff';
+      ctx.fillRect(b.x - 1, b.y - 3, 2, 5);
+      ctx.fillStyle = '#3bc7ff';
+      ctx.fillRect(b.x - 2, b.y + 5, 4, 3);
     } else {
       ctx.fillRect(b.x - b.r / 2, b.y - b.r * 2, b.r, b.r * 3);
     }
