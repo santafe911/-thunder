@@ -16,6 +16,7 @@ const state = {
   pickups: [],
   time: 0,
   score: 0,
+  highScore: Number(localStorage.getItem('raidenClassicHighScore') || 0),
   stageTimer: 0,
   bossSpawned: false,
   bossDefeated: false,
@@ -144,6 +145,7 @@ function resetGame() {
   state.victoryTimer = 0;
   state.rumble = 0;
   setMusicMode('stage');
+  state.highScore = Number(localStorage.getItem('raidenClassicHighScore') || state.highScore || 0);
 
   player.x = W / 2;
   player.y = H - 110;
@@ -159,6 +161,13 @@ function resetGame() {
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
+}
+
+function saveHighScore() {
+  if (state.score > state.highScore) {
+    state.highScore = state.score;
+    localStorage.setItem('raidenClassicHighScore', String(state.highScore));
+  }
 }
 
 function spawnEffect(x, y, color = '#ff9d2e', size = 16, count = 8) {
@@ -273,6 +282,7 @@ function hitPlayer(damage) {
     player.lives -= 1;
     spawnEffect(player.x, player.y, '#ff612b', 26, 26);
     if (player.lives < 0) {
+      saveHighScore();
       state.scene = 'gameover';
       setMusicMode('gameover');
       return;
@@ -393,14 +403,15 @@ function update() {
         e.x += e.moveDir * 1.6;
         if (e.x < 100 || e.x > W - 100) e.moveDir *= -1;
         e.patternTimer += 1;
-        if (e.hp < e.maxHp * 0.55) e.phase = 2;
+        if (e.hp < e.maxHp * 0.3) e.phase = 3;
+        else if (e.hp < e.maxHp * 0.55) e.phase = 2;
         if (e.fireTimer <= 0) {
           if (e.phase === 1) {
             enemyShoot(e, 'wide');
             enemyShoot({ x: e.x - 38, y: e.y + 18 }, 'spread');
             enemyShoot({ x: e.x + 38, y: e.y + 18 }, 'spread');
             e.fireTimer = 32;
-          } else {
+          } else if (e.phase === 2) {
             enemyShoot(e, 'wide');
             enemyShoot({ x: e.x - 46, y: e.y + 20 }, 'wide');
             enemyShoot({ x: e.x + 46, y: e.y + 20 }, 'wide');
@@ -410,6 +421,18 @@ function update() {
               state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * 2.9, vy: Math.sin(angle) * 2.9, r: 5, color: '#ff4fd8', damage: 12 });
             }
             e.fireTimer = 18;
+          } else {
+            enemyShoot(e, 'wide');
+            enemyShoot({ x: e.x - 46, y: e.y + 20 }, 'wide');
+            enemyShoot({ x: e.x + 46, y: e.y + 20 }, 'wide');
+            state.enemyBullets.push({ x: e.x, y: e.y + 30, vx: 0, vy: 5.2, r: 8, color: '#ffd54f', damage: 20 });
+            for (let i = 0; i < 6; i++) {
+              const angle = (-1.0 + i * 0.4) + Math.PI / 2;
+              state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * 3.4, vy: Math.sin(angle) * 3.4, r: 5, color: '#ff4fd8', damage: 14 });
+            }
+            enemyShoot({ x: e.x - 60, y: e.y + 10 }, 'aim');
+            enemyShoot({ x: e.x + 60, y: e.y + 10 }, 'aim');
+            e.fireTimer = 12;
           }
         }
       }
@@ -448,6 +471,7 @@ function update() {
             for (let i = 0; i < 8; i++) {
               spawnEffect(e.x + (Math.random() * 100 - 50), e.y + (Math.random() * 70 - 35), '#ff6b2b', 34, 24);
             }
+            saveHighScore();
             state.bossDefeated = true;
             state.victoryTimer = 180;
             setMusicMode('victory');
@@ -600,14 +624,15 @@ function drawBossBar() {
 
 function drawHUD() {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(10, 10, 178, 104);
+  ctx.fillRect(10, 10, 178, 124);
   ctx.fillStyle = '#d4ecff';
   ctx.font = 'bold 14px sans-serif';
   ctx.fillText(`SCORE ${state.score}`, 18, 30);
-  ctx.fillText(`LIFE ${Math.max(0, player.lives)}`, 18, 48);
-  ctx.fillText(`BOMB ${player.bombs}`, 18, 66);
-  ctx.fillText(`POWER ${player.power}`, 18, 84);
-  ctx.fillText(`SOUND ${audio.muted ? 'OFF' : 'ON'}`, 18, 102);
+  ctx.fillText(`BEST  ${state.highScore}`, 18, 48);
+  ctx.fillText(`LIFE ${Math.max(0, player.lives)}`, 18, 66);
+  ctx.fillText(`BOMB ${player.bombs}`, 18, 84);
+  ctx.fillText(`POWER ${player.power}`, 18, 102);
+  ctx.fillText(`SOUND ${audio.muted ? 'OFF' : 'ON'}`, 18, 120);
 
   ctx.fillStyle = '#1d283f';
   ctx.fillRect(W - 150, 18, 120, 12);
@@ -623,15 +648,23 @@ function drawHUD() {
 function drawOverlay(title, subtitle, prompt) {
   ctx.fillStyle = 'rgba(0,0,0,0.56)';
   ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(10,18,34,0.9)';
+  ctx.fillRect(60, H / 2 - 110, W - 120, 220);
+  ctx.strokeStyle = '#65b7ff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(60, H / 2 - 110, W - 120, 220);
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.font = 'bold 30px sans-serif';
-  ctx.fillText(title, W / 2, H / 2 - 40);
+  ctx.fillText(title, W / 2, H / 2 - 48);
   ctx.font = '16px sans-serif';
   ctx.fillStyle = '#d5e7ff';
-  ctx.fillText(subtitle, W / 2, H / 2);
+  ctx.fillText(subtitle, W / 2, H / 2 - 8);
   ctx.fillStyle = '#9fd9ff';
-  ctx.fillText(prompt, W / 2, H / 2 + 42);
+  ctx.fillText(prompt, W / 2, H / 2 + 36);
+  ctx.fillStyle = '#ffd47a';
+  ctx.font = '13px sans-serif';
+  ctx.fillText('ENTER / 点击开始  ·  P 暂停  ·  M 静音', W / 2, H / 2 + 78);
   ctx.textAlign = 'left';
 }
 
@@ -692,7 +725,7 @@ function render() {
   drawBossBar();
 
   if (state.scene === 'title') {
-    drawOverlay('钢翼雷霆', '单关经典雷电风爽玩版 / 含街机风音乐', '按 Enter / 点击开始');
+    drawOverlay('钢翼雷霆', `单关经典雷电风爽玩版 / 最高分 ${state.highScore}`, '按 Enter / 点击开始');
   } else if (state.scene === 'paused') {
     drawOverlay('战术暂停', '按 P 继续作战 / 按 M 静音切换', '当前战局已冻结');
   } else if (state.scene === 'victory') {
