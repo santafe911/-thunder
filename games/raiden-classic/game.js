@@ -51,7 +51,7 @@ const audio = {
 const musicPatterns = {
   title: [261.63, 329.63, 392.0, 523.25, 392.0, 329.63, 293.66, 329.63],
   stage: [220.0, 246.94, 293.66, 329.63, 293.66, 246.94, 220.0, 293.66],
-  boss: [146.83, 174.61, 196.0, 220.0, 196.0, 174.61, 164.81, 174.61],
+  boss: [164.81, 164.81, 196.0, 220.0, 246.94, 220.0, 196.0, 164.81, 146.83, 164.81, 196.0, 246.94],
   victory: [392.0, 440.0, 523.25, 659.25, 523.25, 659.25, 783.99, 1046.5],
   gameover: [220.0, 207.65, 196.0, 174.61, 164.81, 146.83, 130.81, 110.0],
 };
@@ -107,6 +107,12 @@ function playSfx(kind) {
   if (kind === 'bomb') { playTone(90, 0.25, 'sawtooth', 0.08); playTone(140, 0.18, 'square', 0.06, 0.06); }
   if (kind === 'explode') { playTone(70, 0.22, 'sawtooth', 0.08); playTone(50, 0.28, 'triangle', 0.05, 0.03); }
   if (kind === 'boss') { playTone(180, 0.16, 'square', 0.08); playTone(120, 0.22, 'sawtooth', 0.07, 0.08); }
+  if (kind === 'alarm') { playTone(880, 0.09, 'square', 0.06); playTone(622, 0.09, 'square', 0.05, 0.09); }
+  if (kind === 'bossExplode') {
+    playTone(60, 0.35, 'sawtooth', 0.09);
+    playTone(90, 0.25, 'triangle', 0.07, 0.06);
+    playTone(120, 0.2, 'square', 0.05, 0.12);
+  }
 }
 
 function setMusicMode(mode) {
@@ -226,6 +232,7 @@ function spawnEnemy(type) {
 
 function spawnBoss() {
   playSfx('boss');
+  playSfx('alarm');
   setMusicMode('boss');
   state.enemies.push({
     type: 'boss',
@@ -384,13 +391,17 @@ function update() {
             enemyShoot(e, 'wide');
             enemyShoot({ x: e.x - 38, y: e.y + 18 }, 'spread');
             enemyShoot({ x: e.x + 38, y: e.y + 18 }, 'spread');
-            e.fireTimer = 36;
+            e.fireTimer = 32;
           } else {
             enemyShoot(e, 'wide');
             enemyShoot({ x: e.x - 46, y: e.y + 20 }, 'wide');
             enemyShoot({ x: e.x + 46, y: e.y + 20 }, 'wide');
             state.enemyBullets.push({ x: e.x, y: e.y + 30, vx: 0, vy: 4.4, r: 7, color: '#ffd54f', damage: 18 });
-            e.fireTimer = 24;
+            for (let i = 0; i < 4; i++) {
+              const angle = (-0.75 + i * 0.5) + Math.PI / 2;
+              state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * 2.9, vy: Math.sin(angle) * 2.9, r: 5, color: '#ff4fd8', damage: 12 });
+            }
+            e.fireTimer = 18;
           }
         }
       }
@@ -424,6 +435,11 @@ function update() {
           }
           playSfx('explode');
           if (e.type === 'boss') {
+            playSfx('bossExplode');
+            state.rumble = 40;
+            for (let i = 0; i < 8; i++) {
+              spawnEffect(e.x + (Math.random() * 100 - 50), e.y + (Math.random() * 70 - 35), '#ff6b2b', 34, 24);
+            }
             state.bossDefeated = true;
             state.victoryTimer = 180;
             setMusicMode('victory');
@@ -474,11 +490,12 @@ function update() {
       const pattern = musicPatterns[audio.mode] || musicPatterns.title;
       const freq = pattern[audio.bgmStep % pattern.length];
       const type = audio.mode === 'boss' ? 'sawtooth' : (audio.mode === 'stage' ? 'square' : 'triangle');
-      const vol = audio.mode === 'boss' ? 0.05 : 0.035;
-      playTone(freq, 0.22, type, vol);
-      if (audio.mode === 'stage' || audio.mode === 'boss') playTone(freq / 2, 0.2, 'triangle', 0.02, 0.01);
+      const vol = audio.mode === 'boss' ? 0.065 : 0.035;
+      playTone(freq, audio.mode === 'boss' ? 0.18 : 0.22, type, vol);
+      if (audio.mode === 'stage' || audio.mode === 'boss') playTone(freq / 2, 0.2, 'triangle', audio.mode === 'boss' ? 0.03 : 0.02, 0.01);
+      if (audio.mode === 'boss' && audio.bgmStep % 2 === 0) playTone(freq * 1.5, 0.08, 'square', 0.03, 0.02);
       audio.bgmStep += 1;
-      audio.bgmTimer = audio.mode === 'boss' ? 10 : 14;
+      audio.bgmTimer = audio.mode === 'boss' ? 8 : 14;
     }
   }
 }
