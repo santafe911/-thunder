@@ -35,6 +35,7 @@ const player = {
   lives: 3,
   bombs: 3,
   power: 1,
+  weapon: 'cannon',
   fireCooldown: 0,
   invuln: 0,
   respawnTimer: 0,
@@ -154,6 +155,7 @@ function resetGame() {
   player.lives = 3;
   player.bombs = 3;
   player.power = 1;
+  player.weapon = 'cannon';
   player.fireCooldown = 0;
   player.invuln = 120;
   player.respawnTimer = 0;
@@ -187,28 +189,61 @@ function spawnEffect(x, y, color = '#ff9d2e', size = 16, count = 8) {
 }
 
 function shootPlayer() {
-  const base = [
-    { x: player.x, y: player.y - 18, vx: 0, vy: -9 },
-  ];
-  if (player.power >= 2) {
-    base.push({ x: player.x - 11, y: player.y - 10, vx: -0.5, vy: -8.7 });
-    base.push({ x: player.x + 11, y: player.y - 10, vx: 0.5, vy: -8.7 });
-  }
-  if (player.power >= 3) {
-    base.push({ x: player.x - 18, y: player.y - 4, vx: -1.1, vy: -8.3 });
-    base.push({ x: player.x + 18, y: player.y - 4, vx: 1.1, vy: -8.3 });
-  }
-  if (player.power >= 4) {
-    base.push({ x: player.x, y: player.y - 18, vx: -1.3, vy: -8.8, big: true });
-    base.push({ x: player.x, y: player.y - 18, vx: 1.3, vy: -8.8, big: true });
-  }
-  for (const b of base) {
-    state.bullets.push({
-      ...b,
-      r: b.big ? 4 : 3,
-      damage: b.big ? 16 : 10,
-      color: b.big ? '#fff36d' : '#8ef3ff',
-    });
+  if (player.weapon === 'cannon') {
+    const base = [
+      { x: player.x, y: player.y - 18, vx: 0, vy: -9 },
+    ];
+    if (player.power >= 2) {
+      base.push({ x: player.x - 11, y: player.y - 10, vx: -0.5, vy: -8.7 });
+      base.push({ x: player.x + 11, y: player.y - 10, vx: 0.5, vy: -8.7 });
+    }
+    if (player.power >= 3) {
+      base.push({ x: player.x - 18, y: player.y - 4, vx: -1.1, vy: -8.3 });
+      base.push({ x: player.x + 18, y: player.y - 4, vx: 1.1, vy: -8.3 });
+    }
+    if (player.power >= 4) {
+      base.push({ x: player.x, y: player.y - 18, vx: -1.3, vy: -8.8, big: true });
+      base.push({ x: player.x, y: player.y - 18, vx: 1.3, vy: -8.8, big: true });
+    }
+    for (const b of base) {
+      state.bullets.push({
+        ...b,
+        kind: 'cannon',
+        r: b.big ? 4 : 3,
+        damage: b.big ? 16 : 10,
+        color: b.big ? '#fff36d' : '#8ef3ff',
+      });
+    }
+  } else if (player.weapon === 'spread') {
+    const count = 5 + Math.min(2, player.power - 1);
+    for (let i = 0; i < count; i++) {
+      const angle = (-0.55 + (i * (1.1 / Math.max(1, count - 1)))) - Math.PI / 2;
+      state.bullets.push({
+        x: player.x,
+        y: player.y - 12,
+        vx: Math.cos(angle) * 3.2,
+        vy: Math.sin(angle) * 7.8,
+        kind: 'spread',
+        r: 3,
+        damage: 8,
+        color: '#7dff8f',
+      });
+    }
+  } else if (player.weapon === 'laser') {
+    const beams = player.power >= 3 ? [-8, 8] : [0];
+    for (const off of beams) {
+      state.bullets.push({
+        x: player.x + off,
+        y: player.y - 26,
+        vx: 0,
+        vy: -14,
+        kind: 'laser',
+        r: 5,
+        damage: 22,
+        color: '#ff5ad9',
+        tall: true,
+      });
+    }
   }
   playSfx('shoot');
 }
@@ -350,7 +385,9 @@ function update() {
   const firing = state.keys['j'] || state.keys[' '] || state.mouse.firing;
   if (firing && player.fireCooldown <= 0) {
     shootPlayer();
-    player.fireCooldown = Math.max(4, 8 - player.power);
+    if (player.weapon === 'cannon') player.fireCooldown = Math.max(4, 8 - player.power);
+    else if (player.weapon === 'spread') player.fireCooldown = 10;
+    else player.fireCooldown = 7;
   }
 
   if (!state.bossSpawned) {
@@ -460,9 +497,12 @@ function update() {
           e.dead = true;
           state.score += e.score;
           spawnEffect(e.x, e.y, e.type === 'boss' ? '#ff4e39' : '#ff9f43', e.type === 'boss' ? 40 : 20, e.type === 'boss' ? 40 : 16);
-          if (Math.random() < 0.16 && e.type !== 'boss') {
-            const kind = Math.random() > 0.7 ? 'bomb' : 'power';
-            state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind });
+          if (Math.random() < 0.22 && e.type !== 'boss') {
+            let kind = 'power';
+            const roll = Math.random();
+            if (roll > 0.82) kind = 'bomb';
+            else if (roll > 0.58) kind = 'weapon';
+            state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind, weapon: Math.random() > 0.5 ? 'spread' : 'laser' });
           }
           playSfx('explode');
           if (e.type === 'boss') {
@@ -504,6 +544,7 @@ function update() {
       p.dead = true;
       if (p.kind === 'power') player.power = Math.min(4, player.power + 1);
       if (p.kind === 'bomb') player.bombs = Math.min(5, player.bombs + 1);
+      if (p.kind === 'weapon') player.weapon = p.weapon;
       state.score += 100;
       playSfx('pickup');
       spawnEffect(p.x, p.y, '#6dffb3', 12, 10);
@@ -624,7 +665,7 @@ function drawBossBar() {
 
 function drawHUD() {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(10, 10, 178, 124);
+  ctx.fillRect(10, 10, 178, 144);
   ctx.fillStyle = '#d4ecff';
   ctx.font = 'bold 14px sans-serif';
   ctx.fillText(`SCORE ${state.score}`, 18, 30);
@@ -632,7 +673,8 @@ function drawHUD() {
   ctx.fillText(`LIFE ${Math.max(0, player.lives)}`, 18, 66);
   ctx.fillText(`BOMB ${player.bombs}`, 18, 84);
   ctx.fillText(`POWER ${player.power}`, 18, 102);
-  ctx.fillText(`SOUND ${audio.muted ? 'OFF' : 'ON'}`, 18, 120);
+  ctx.fillText(`WEAPON ${player.weapon.toUpperCase()}`, 18, 120);
+  ctx.fillText(`SOUND ${audio.muted ? 'OFF' : 'ON'}`, 18, 138);
 
   ctx.fillStyle = '#1d283f';
   ctx.fillRect(W - 150, 18, 120, 12);
@@ -691,15 +733,22 @@ function render() {
   }
 
   for (const p of state.pickups) {
-    ctx.fillStyle = p.kind === 'power' ? '#7cff72' : '#ffd44d';
+    ctx.fillStyle = p.kind === 'power' ? '#7cff72' : p.kind === 'bomb' ? '#ffd44d' : (p.weapon === 'spread' ? '#7dff8f' : '#ff5ad9');
     ctx.fillRect(p.x - 8, p.y - 8, 16, 16);
     ctx.fillStyle = '#111';
-    ctx.fillText(p.kind === 'power' ? 'P' : 'B', p.x - 4, p.y + 4);
+    const label = p.kind === 'power' ? 'P' : p.kind === 'bomb' ? 'B' : (p.weapon === 'spread' ? 'S' : 'L');
+    ctx.fillText(label, p.x - 4, p.y + 4);
   }
 
   for (const b of state.bullets) {
     ctx.fillStyle = b.color;
-    ctx.fillRect(b.x - b.r / 2, b.y - b.r * 2, b.r, b.r * 3);
+    if (b.kind === 'laser') {
+      ctx.fillRect(b.x - 2, b.y - 20, 4, 24);
+      ctx.fillStyle = '#ffd2ff';
+      ctx.fillRect(b.x - 1, b.y - 20, 2, 24);
+    } else {
+      ctx.fillRect(b.x - b.r / 2, b.y - b.r * 2, b.r, b.r * 3);
+    }
   }
   for (const b of state.enemyBullets) {
     ctx.fillStyle = b.color;
