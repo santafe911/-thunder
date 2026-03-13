@@ -309,6 +309,12 @@ function spawnEnemy(type) {
   if (type === 'gunship') {
     state.enemies.push({ type, x, y: -50, w: 42, h: 32, hp: 180, maxHp: 180, speed: 1.15, fireTimer: 45, score: 900 });
   }
+  if (type === 'minibossA') {
+    state.enemies.push({ type, x: W / 2, y: -70, targetY: 140, w: 72, h: 56, hp: 420, maxHp: 420, speed: 1.3, fireTimer: 34, moveDir: 1, score: 2200 });
+  }
+  if (type === 'minibossB') {
+    state.enemies.push({ type, x: W / 2, y: -70, targetY: 150, w: 84, h: 60, hp: 560, maxHp: 560, speed: 1.45, fireTimer: 28, moveDir: 1, score: 3200 });
+  }
 }
 
 function spawnBoss() {
@@ -426,10 +432,12 @@ function update() {
   }
 
   if (!state.bossSpawned) {
-    if (state.stageTimer % 55 === 0 && state.stageTimer < 820) spawnEnemy('drone');
-    if (state.stageTimer % 160 === 80 && state.stageTimer < 760) spawnEnemy('fighter');
-    if ((state.stageTimer === 300 || state.stageTimer === 620) && state.stageTimer < 820) spawnEnemy('gunship');
-    if (state.stageTimer > 950) {
+    if (state.stageTimer % 55 === 0 && state.stageTimer < 1650) spawnEnemy('drone');
+    if (state.stageTimer % 150 === 80 && state.stageTimer < 1550) spawnEnemy('fighter');
+    if ([300, 620, 980, 1320].includes(state.stageTimer)) spawnEnemy('gunship');
+    if (state.stageTimer === 760) spawnEnemy('minibossA');
+    if (state.stageTimer === 1360) spawnEnemy('minibossB');
+    if (state.stageTimer > 1900) {
       state.bossSpawned = true;
       spawnBoss();
     }
@@ -480,6 +488,27 @@ function update() {
       if (e.fireTimer <= 0) {
         enemyShoot(e, 'wide');
         e.fireTimer = 45;
+      }
+    } else if (e.type === 'minibossA' || e.type === 'minibossB') {
+      if (e.y < e.targetY) {
+        e.y += 1.6;
+      } else {
+        e.x += e.moveDir * (e.type === 'minibossA' ? 1.8 : 2.2);
+        if (e.x < 90 || e.x > W - 90) e.moveDir *= -1;
+        if (e.fireTimer <= 0) {
+          enemyShoot(e, 'wide');
+          enemyShoot({ x: e.x - 22, y: e.y + 12 }, 'aim');
+          enemyShoot({ x: e.x + 22, y: e.y + 12 }, 'aim');
+          if (e.type === 'minibossB') {
+            for (let i = 0; i < 4; i++) {
+              const angle = (-0.65 + i * 0.43) + Math.PI / 2;
+              state.enemyBullets.push({ x: e.x, y: e.y + 22, vx: Math.cos(angle) * 3.0, vy: Math.sin(angle) * 3.0, r: 5, color: '#ff4fd8', damage: 12 });
+            }
+            e.fireTimer = 18;
+          } else {
+            e.fireTimer = 26;
+          }
+        }
       }
     } else if (e.type === 'boss') {
       if (e.y < e.targetY) {
@@ -664,6 +693,18 @@ function drawEnemy(e) {
     ctx.fillStyle = '#ffcf53';
     ctx.fillRect(x - 14, y + 10, 8, 4);
     ctx.fillRect(x + 6, y + 10, 8, 4);
+  } else if (e.type === 'minibossA' || e.type === 'minibossB') {
+    ctx.fillStyle = e.type === 'minibossA' ? '#6f7cff' : '#ff7b59';
+    ctx.fillRect(x - 30, y - 20, 60, 40);
+    ctx.fillRect(x - 14, y - 30, 28, 12);
+    ctx.fillStyle = '#263041';
+    ctx.fillRect(x - 10, y - 16, 20, 24);
+    ctx.fillStyle = '#a9ecff';
+    ctx.fillRect(x - 22, y - 6, 10, 8);
+    ctx.fillRect(x + 12, y - 6, 10, 8);
+    ctx.fillStyle = '#ffd24d';
+    ctx.fillRect(x - 26, y + 14, 8, 5);
+    ctx.fillRect(x + 18, y + 14, 8, 5);
   } else if (e.type === 'boss') {
     ctx.fillStyle = '#7a8ca5';
     ctx.fillRect(x - 64, y - 32, 128, 64);
