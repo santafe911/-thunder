@@ -39,6 +39,23 @@ const player = {
   respawnTimer: 0,
 };
 
+const audio = {
+  ctx: null,
+  master: null,
+  unlocked: false,
+  bgmTimer: 0,
+  bgmStep: 0,
+  mode: 'title',
+};
+
+const musicPatterns = {
+  title: [261.63, 329.63, 392.0, 523.25, 392.0, 329.63, 293.66, 329.63],
+  stage: [220.0, 246.94, 293.66, 329.63, 293.66, 246.94, 220.0, 293.66],
+  boss: [146.83, 174.61, 196.0, 220.0, 196.0, 174.61, 164.81, 174.61],
+  victory: [392.0, 440.0, 523.25, 659.25, 523.25, 659.25, 783.99, 1046.5],
+  gameover: [220.0, 207.65, 196.0, 174.61, 164.81, 146.83, 130.81, 110.0],
+};
+
 for (let i = 0; i < 90; i++) {
   state.stars.push({
     x: Math.random() * W,
@@ -49,7 +66,57 @@ for (let i = 0; i < 90; i++) {
   });
 }
 
+function ensureAudio() {
+  if (audio.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audio.ctx = new AC();
+  audio.master = audio.ctx.createGain();
+  audio.master.gain.value = 0.08;
+  audio.master.connect(audio.ctx.destination);
+}
+
+function unlockAudio() {
+  ensureAudio();
+  if (!audio.ctx) return;
+  if (audio.ctx.state === 'suspended') audio.ctx.resume();
+  audio.unlocked = true;
+}
+
+function playTone(freq, duration = 0.12, type = 'square', volume = 0.08, when = 0) {
+  if (!audio.unlocked || !audio.ctx) return;
+  const now = audio.ctx.currentTime + when;
+  const osc = audio.ctx.createOscillator();
+  const gain = audio.ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(gain);
+  gain.connect(audio.master);
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+}
+
+function playSfx(kind) {
+  if (!audio.unlocked) return;
+  if (kind === 'shoot') playTone(780, 0.05, 'square', 0.03);
+  if (kind === 'hit') playTone(120, 0.12, 'sawtooth', 0.06);
+  if (kind === 'pickup') { playTone(660, 0.08, 'square', 0.05); playTone(990, 0.1, 'triangle', 0.04, 0.06); }
+  if (kind === 'bomb') { playTone(90, 0.25, 'sawtooth', 0.08); playTone(140, 0.18, 'square', 0.06, 0.06); }
+  if (kind === 'explode') { playTone(70, 0.22, 'sawtooth', 0.08); playTone(50, 0.28, 'triangle', 0.05, 0.03); }
+  if (kind === 'boss') { playTone(180, 0.16, 'square', 0.08); playTone(120, 0.22, 'sawtooth', 0.07, 0.08); }
+}
+
+function setMusicMode(mode) {
+  audio.mode = mode;
+  audio.bgmTimer = 0;
+  audio.bgmStep = 0;
+}
+
 function resetGame() {
+  unlockAudio();
   state.scene = 'playing';
   state.bullets = [];
   state.enemyBullets = [];
@@ -63,6 +130,7 @@ function resetGame() {
   state.bossDefeated = false;
   state.victoryTimer = 0;
   state.rumble = 0;
+  setMusicMode('stage');
 
   player.x = W / 2;
   player.y = H - 110;
@@ -120,6 +188,7 @@ function shootPlayer() {
       color: b.big ? '#fff36d' : '#8ef3ff',
     });
   }
+  playSfx('shoot');
 }
 
 function enemyShoot(enemy, pattern = 'spread') {
@@ -156,6 +225,8 @@ function spawnEnemy(type) {
 }
 
 function spawnBoss() {
+  playSfx('boss');
+  setMusicMode('boss');
   state.enemies.push({
     type: 'boss',
     x: W / 2,
@@ -183,11 +254,13 @@ function hitPlayer(damage) {
   player.invuln = 70;
   state.rumble = 10;
   spawnEffect(player.x, player.y, '#ffffff', 14, 12);
+  playSfx('hit');
   if (player.hp <= 0) {
     player.lives -= 1;
     spawnEffect(player.x, player.y, '#ff612b', 26, 26);
     if (player.lives < 0) {
       state.scene = 'gameover';
+      setMusicMode('gameover');
       return;
     }
     player.hp = player.maxHp;
@@ -202,6 +275,7 @@ function hitPlayer(damage) {
 function useBomb() {
   if (player.bombs <= 0 || state.scene !== 'playing') return;
   player.bombs -= 1;
+  playSfx('bomb');
   state.enemyBullets = [];
   state.rumble = 20;
   spawnEffect(player.x, player.y, '#7be7ff', 40, 42);
@@ -348,9 +422,11 @@ function update() {
             const kind = Math.random() > 0.7 ? 'bomb' : 'power';
             state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind });
           }
+          playSfx('explode');
           if (e.type === 'boss') {
             state.bossDefeated = true;
             state.victoryTimer = 180;
+            setMusicMode('victory');
           }
         }
       }
@@ -381,6 +457,7 @@ function update() {
       if (p.kind === 'power') player.power = Math.min(4, player.power + 1);
       if (p.kind === 'bomb') player.bombs = Math.min(5, player.bombs + 1);
       state.score += 100;
+      playSfx('pickup');
       spawnEffect(p.x, p.y, '#6dffb3', 12, 10);
     }
   }
@@ -389,6 +466,20 @@ function update() {
   if (state.bossDefeated) {
     state.victoryTimer -= 1;
     if (state.victoryTimer <= 0) state.scene = 'victory';
+  }
+
+  if (audio.unlocked && audio.ctx) {
+    audio.bgmTimer -= 1;
+    if (audio.bgmTimer <= 0) {
+      const pattern = musicPatterns[audio.mode] || musicPatterns.title;
+      const freq = pattern[audio.bgmStep % pattern.length];
+      const type = audio.mode === 'boss' ? 'sawtooth' : (audio.mode === 'stage' ? 'square' : 'triangle');
+      const vol = audio.mode === 'boss' ? 0.05 : 0.035;
+      playTone(freq, 0.22, type, vol);
+      if (audio.mode === 'stage' || audio.mode === 'boss') playTone(freq / 2, 0.2, 'triangle', 0.02, 0.01);
+      audio.bgmStep += 1;
+      audio.bgmTimer = audio.mode === 'boss' ? 10 : 14;
+    }
   }
 }
 
@@ -557,7 +648,7 @@ function render() {
   drawBossBar();
 
   if (state.scene === 'title') {
-    drawOverlay('钢翼雷霆', '单关经典雷电风爽玩版', '按 Enter / 点击开始');
+    drawOverlay('钢翼雷霆', '单关经典雷电风爽玩版 / 含街机风音乐', '按 Enter / 点击开始');
   } else if (state.scene === 'victory') {
     drawOverlay('任务完成', `最终得分 ${state.score}`, '按 Enter 再来一局');
   } else if (state.scene === 'gameover') {
@@ -574,6 +665,7 @@ function loop() {
 }
 
 window.addEventListener('keydown', (e) => {
+  unlockAudio();
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   state.keys[k] = true;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
@@ -596,6 +688,7 @@ canvas.addEventListener('mouseleave', () => {
   state.mouse.firing = false;
 });
 canvas.addEventListener('mousedown', (e) => {
+  unlockAudio();
   if (e.button === 0) state.mouse.firing = true;
   if (e.button === 2) useBomb();
   if (state.scene === 'title' || state.scene === 'victory' || state.scene === 'gameover') resetGame();
