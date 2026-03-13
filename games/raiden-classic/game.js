@@ -46,6 +46,8 @@ const audio = {
   bgmTimer: 0,
   bgmStep: 0,
   mode: 'title',
+  muted: false,
+  volume: 0.08,
 };
 
 const musicPatterns = {
@@ -72,8 +74,12 @@ function ensureAudio() {
   if (!AC) return;
   audio.ctx = new AC();
   audio.master = audio.ctx.createGain();
-  audio.master.gain.value = 0.08;
+  audio.master.gain.value = audio.volume;
   audio.master.connect(audio.ctx.destination);
+}
+
+function syncVolume() {
+  if (audio.master) audio.master.gain.value = audio.muted ? 0 : audio.volume;
 }
 
 function unlockAudio() {
@@ -81,6 +87,7 @@ function unlockAudio() {
   if (!audio.ctx) return;
   if (audio.ctx.state === 'suspended') audio.ctx.resume();
   audio.unlocked = true;
+  syncVolume();
 }
 
 function playTone(freq, duration = 0.12, type = 'square', volume = 0.08, when = 0) {
@@ -304,6 +311,7 @@ function update() {
     }
   }
 
+  if (state.scene === 'paused') return;
   if (state.scene !== 'playing') return;
 
   state.stageTimer += 1;
@@ -502,17 +510,25 @@ function update() {
 
 function drawShip(x, y, color = '#5fd1ff') {
   const px = Math.round(x), py = Math.round(y);
-  ctx.fillStyle = '#c8f7ff';
-  ctx.fillRect(px - 2, py - 16, 4, 10);
+  ctx.fillStyle = '#ecfbff';
+  ctx.fillRect(px - 2, py - 18, 4, 6);
+  ctx.fillRect(px - 4, py - 12, 8, 4);
   ctx.fillStyle = color;
-  ctx.fillRect(px - 5, py - 8, 10, 18);
-  ctx.fillRect(px - 12, py + 2, 8, 10);
-  ctx.fillRect(px + 4, py + 2, 8, 10);
+  ctx.fillRect(px - 6, py - 8, 12, 20);
+  ctx.fillRect(px - 15, py + 1, 9, 10);
+  ctx.fillRect(px + 6, py + 1, 9, 10);
+  ctx.fillRect(px - 10, py + 8, 5, 4);
+  ctx.fillRect(px + 5, py + 8, 5, 4);
   ctx.fillStyle = '#1d4f90';
-  ctx.fillRect(px - 2, py - 4, 4, 8);
+  ctx.fillRect(px - 3, py - 6, 6, 12);
+  ctx.fillStyle = '#7ce8ff';
+  ctx.fillRect(px - 1, py - 12, 2, 6);
+  ctx.fillStyle = '#ffca53';
+  ctx.fillRect(px - 15, py + 11, 4, 2);
+  ctx.fillRect(px + 11, py + 11, 4, 2);
   ctx.fillStyle = '#ff8a3d';
-  ctx.fillRect(px - 8, py + 12, 4, 5);
-  ctx.fillRect(px + 4, py + 12, 4, 5);
+  ctx.fillRect(px - 10, py + 12, 4, 6);
+  ctx.fillRect(px + 6, py + 12, 4, 6);
 }
 
 function drawEnemy(e) {
@@ -537,15 +553,25 @@ function drawEnemy(e) {
     ctx.fillRect(x + 6, y + 10, 8, 4);
   } else if (e.type === 'boss') {
     ctx.fillStyle = '#7a8ca5';
-    ctx.fillRect(x - 60, y - 30, 120, 60);
-    ctx.fillRect(x - 30, y - 42, 60, 16);
+    ctx.fillRect(x - 64, y - 32, 128, 64);
+    ctx.fillRect(x - 36, y - 48, 72, 18);
+    ctx.fillRect(x - 82, y - 12, 18, 28);
+    ctx.fillRect(x + 64, y - 12, 18, 28);
+    ctx.fillStyle = '#495f7b';
+    ctx.fillRect(x - 52, y - 22, 104, 44);
     ctx.fillStyle = '#31445d';
-    ctx.fillRect(x - 18, y - 18, 36, 28);
+    ctx.fillRect(x - 22, y - 18, 44, 32);
     ctx.fillStyle = '#ff6a4d';
-    ctx.fillRect(x - 54, y - 10, 18, 24);
-    ctx.fillRect(x + 36, y - 10, 18, 24);
+    ctx.fillRect(x - 58, y - 10, 18, 24);
+    ctx.fillRect(x + 40, y - 10, 18, 24);
     ctx.fillStyle = '#ffd24d';
-    ctx.fillRect(x - 8, y - 28, 16, 8);
+    ctx.fillRect(x - 10, y - 30, 20, 8);
+    ctx.fillStyle = '#9ee9ff';
+    ctx.fillRect(x - 40, y - 6, 12, 8);
+    ctx.fillRect(x + 28, y - 6, 12, 8);
+    ctx.fillStyle = '#222b38';
+    ctx.fillRect(x - 74, y + 12, 12, 10);
+    ctx.fillRect(x + 62, y + 12, 12, 10);
   }
 
   if (e.type !== 'boss') {
@@ -574,13 +600,14 @@ function drawBossBar() {
 
 function drawHUD() {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(10, 10, 178, 82);
+  ctx.fillRect(10, 10, 178, 104);
   ctx.fillStyle = '#d4ecff';
   ctx.font = 'bold 14px sans-serif';
   ctx.fillText(`SCORE ${state.score}`, 18, 30);
   ctx.fillText(`LIFE ${Math.max(0, player.lives)}`, 18, 48);
   ctx.fillText(`BOMB ${player.bombs}`, 18, 66);
   ctx.fillText(`POWER ${player.power}`, 18, 84);
+  ctx.fillText(`SOUND ${audio.muted ? 'OFF' : 'ON'}`, 18, 102);
 
   ctx.fillStyle = '#1d283f';
   ctx.fillRect(W - 150, 18, 120, 12);
@@ -666,6 +693,8 @@ function render() {
 
   if (state.scene === 'title') {
     drawOverlay('钢翼雷霆', '单关经典雷电风爽玩版 / 含街机风音乐', '按 Enter / 点击开始');
+  } else if (state.scene === 'paused') {
+    drawOverlay('战术暂停', '按 P 继续作战 / 按 M 静音切换', '当前战局已冻结');
   } else if (state.scene === 'victory') {
     drawOverlay('任务完成', `最终得分 ${state.score}`, '按 Enter 再来一局');
   } else if (state.scene === 'gameover') {
@@ -688,6 +717,12 @@ window.addEventListener('keydown', (e) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
   if (k === 'Enter' && (state.scene === 'title' || state.scene === 'victory' || state.scene === 'gameover')) resetGame();
   if (k === 'k') useBomb();
+  if (k === 'p' && state.scene === 'playing') state.scene = 'paused';
+  else if (k === 'p' && state.scene === 'paused') state.scene = 'playing';
+  if (k === 'm') {
+    audio.muted = !audio.muted;
+    syncVolume();
+  }
 });
 window.addEventListener('keyup', (e) => {
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
