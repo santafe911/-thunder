@@ -205,6 +205,34 @@ function saveHighScore() {
   }
 }
 
+function buildResultSummary(won = false) {
+  const lifeBonus = Math.max(0, player.lives) * 1000;
+  const hpBonus = Math.max(0, player.hp) * 20;
+  const bombBonus = player.bombs * 500;
+  const clearBonus = won ? 5000 : 0;
+  const total = state.score + lifeBonus + hpBonus + bombBonus + clearBonus;
+  let rank = 'C';
+  if (total >= 20000) rank = 'S';
+  else if (total >= 14000) rank = 'A';
+  else if (total >= 9000) rank = 'B';
+  state.result = { won, baseScore: state.score, lifeBonus, hpBonus, bombBonus, clearBonus, total, rank };
+  return state.result;
+}
+
+function getWeaponLevel(weapon = player.weapon) {
+  return player.weaponLevels[weapon] || 1;
+}
+
+function upgradeWeapon(nextWeapon) {
+  if (player.weapon === nextWeapon) {
+    player.weaponLevels[nextWeapon] = Math.min(3, getWeaponLevel(nextWeapon) + 1);
+    player.power = Math.min(4, player.power + 1);
+  } else {
+    player.weapon = nextWeapon;
+    player.weaponLevels[nextWeapon] = Math.max(1, getWeaponLevel(nextWeapon));
+  }
+}
+
 function spawnEffect(x, y, color = '#ff9d2e', size = 16, count = 8) {
   for (let i = 0; i < count; i++) {
     const a = Math.random() * Math.PI * 2;
