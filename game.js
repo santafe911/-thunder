@@ -22,6 +22,8 @@ const state = {
   bossDefeated: false,
   victoryTimer: 0,
   rumble: 0,
+  phaseBanner: null,
+  phaseBannerTimer: 0,
 };
 
 const player = {
@@ -233,6 +235,11 @@ function upgradeWeapon(nextWeapon) {
     player.weapon = nextWeapon;
     player.weaponLevels[nextWeapon] = Math.max(1, getWeaponLevel(nextWeapon));
   }
+}
+
+function triggerBossPhaseBanner(phase) {
+  state.phaseBanner = phase >= 3 ? 'Boss Phase 3' : `Boss Phase ${phase}`;
+  state.phaseBannerTimer = 90;
 }
 
 function spawnEffect(x, y, color = '#ff9d2e', size = 16, count = 8) {
@@ -693,9 +700,13 @@ function handlePlayerCollisions() {
 
   for (const e of state.enemies) {
     if (rectsOverlap({ x: player.x, y: player.y, w: player.w, h: player.h }, e)) {
-      e.dead = true;
+      const canTakeCollision = player.invuln <= 0 && player.respawnTimer <= 0 && state.scene === 'playing';
+      if (!canTakeCollision) continue;
       hitPlayer(28);
-      spawnEffect(e.x, e.y, '#ff6b3d', 22, 20);
+      if (e.type !== 'boss') {
+        e.dead = true;
+        spawnEffect(e.x, e.y, '#ff6b3d', 22, 20);
+      }
     }
   }
 
@@ -704,7 +715,7 @@ function handlePlayerCollisions() {
       p.dead = true;
       if (p.kind === 'power') player.power = Math.min(4, player.power + 1);
       if (p.kind === 'bomb') player.bombs = Math.min(5, player.bombs + 1);
-      if (p.kind === 'weapon') player.weapon = p.weapon;
+      if (p.kind === 'weapon') upgradeWeapon(p.weapon);
       state.score += 100;
       playSfx('pickup');
       spawnEffect(p.x, p.y, '#6dffb3', 12, 10);
@@ -737,6 +748,16 @@ function updateAudioLoop() {
   }
 }
 
+function updatePhaseBanner() {
+  if (state.phaseBannerTimer > 0) {
+    state.phaseBannerTimer -= 1;
+    if (state.phaseBannerTimer <= 0) {
+      state.phaseBannerTimer = 0;
+      state.phaseBanner = null;
+    }
+  }
+}
+
 function update() {
   state.time += 1;
   if (state.rumble > 0) state.rumble -= 1;
@@ -756,6 +777,7 @@ function update() {
   handleBulletEnemyCollisions();
   handlePlayerCollisions();
   updateVictoryState();
+  updatePhaseBanner();
   updateAudioLoop();
 }
 
@@ -1084,12 +1106,6 @@ canvas.addEventListener('mousedown', (e) => {
   if (state.scene === 'title' || state.scene === 'victory' || state.scene === 'gameover') resetGame();
 });
 canvas.addEventListener('mouseup', (e) => {
-  if (e.button === 0) state.mouse.firing = false;
-});
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-loop();
-r('mouseup', (e) => {
   if (e.button === 0) state.mouse.firing = false;
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
