@@ -1038,21 +1038,3 @@ canvas.addEventListener('mouseup', (e) => {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 loop();
-active = true;
-});
-canvas.addEventListener('mouseleave', () => {
-  state.mouse.active = false;
-  state.mouse.firing = false;
-});
-canvas.addEventListener('mousedown', (e) => {
-  unlockAudio();
-  if (e.button === 0) state.mouse.firing = true;
-  if (e.button === 2) useBomb();
-  if (state.scene === 'title' || state.scene === 'victory' || state.scene === 'gameover') resetGame();
-});
-canvas.addEventListener('mouseup', (e) => {
-  if (e.button === 0) state.mouse.firing = false;
-});
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-loop();
