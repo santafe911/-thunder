@@ -634,6 +634,7 @@ function handleBulletEnemyCollisions() {
             for (let i = 0; i < 8; i++) {
               spawnEffect(e.x + (Math.random() * 100 - 50), e.y + (Math.random() * 70 - 35), '#ff6b2b', 34, 24);
             }
+            buildResultSummary(true);
             saveHighScore();
             state.bossDefeated = true;
             state.victoryTimer = 180;
@@ -854,22 +855,42 @@ function drawOverlay(title, subtitle, prompt) {
   ctx.fillStyle = 'rgba(0,0,0,0.56)';
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = 'rgba(10,18,34,0.9)';
-  ctx.fillRect(60, H / 2 - 110, W - 120, 220);
+  ctx.fillRect(60, H / 2 - 140, W - 120, 280);
   ctx.strokeStyle = '#65b7ff';
   ctx.lineWidth = 2;
-  ctx.strokeRect(60, H / 2 - 110, W - 120, 220);
+  ctx.strokeRect(60, H / 2 - 140, W - 120, 280);
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.font = 'bold 30px sans-serif';
-  ctx.fillText(title, W / 2, H / 2 - 48);
+  ctx.fillText(title, W / 2, H / 2 - 80);
   ctx.font = '16px sans-serif';
   ctx.fillStyle = '#d5e7ff';
-  ctx.fillText(subtitle, W / 2, H / 2 - 8);
+  ctx.fillText(subtitle, W / 2, H / 2 - 42);
   ctx.fillStyle = '#9fd9ff';
-  ctx.fillText(prompt, W / 2, H / 2 + 36);
+  ctx.fillText(prompt, W / 2, H / 2 + 84);
   ctx.fillStyle = '#ffd47a';
   ctx.font = '13px sans-serif';
-  ctx.fillText('ENTER / 点击开始  ·  P 暂停  ·  M 静音', W / 2, H / 2 + 78);
+  ctx.fillText('ENTER / 点击开始  ·  P 暂停  ·  M 静音', W / 2, H / 2 + 116);
+
+  if (state.result && (state.scene === 'victory' || state.scene === 'gameover')) {
+    const r = state.result;
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillStyle = r.rank === 'S' ? '#ffe27a' : r.rank === 'A' ? '#9dffbf' : r.rank === 'B' ? '#8fd3ff' : '#ffb6a0';
+    ctx.fillText(`评级 ${r.rank}`, 110, H / 2 - 6);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#d5e7ff';
+    ctx.fillText(`基础分: ${r.baseScore}`, 110, H / 2 + 24);
+    ctx.fillText(`生命奖励: ${r.lifeBonus}`, 110, H / 2 + 46);
+    ctx.fillText(`护甲奖励: ${r.hpBonus}`, 110, H / 2 + 68);
+    ctx.fillText(`炸弹奖励: ${r.bombBonus}`, 110, H / 2 + 90);
+    if (r.clearBonus > 0) ctx.fillText(`通关奖励: ${r.clearBonus}`, 260, H / 2 + 24);
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(`总评分: ${r.total}`, 260, H / 2 + 68);
+    ctx.textAlign = 'center';
+  }
+
   ctx.textAlign = 'left';
 }
 
@@ -962,9 +983,9 @@ function render() {
   } else if (state.scene === 'paused') {
     drawOverlay('战术暂停', '按 P 继续作战 / 按 M 静音切换', '当前战局已冻结');
   } else if (state.scene === 'victory') {
-    drawOverlay('任务完成', `最终得分 ${state.score}`, '按 Enter 再来一局');
+    drawOverlay('任务完成', `基础得分 ${state.score} / 总评分 ${state.result?.total ?? state.score}`, '按 Enter 再来一局');
   } else if (state.scene === 'gameover') {
-    drawOverlay('作战失败', `最终得分 ${state.score}`, '按 Enter 重新起飞');
+    drawOverlay('作战失败', `基础得分 ${state.score} / 总评分 ${state.result?.total ?? state.score}`, '按 Enter 重新起飞');
   }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1000,6 +1021,24 @@ canvas.addEventListener('mousemove', (e) => {
   state.mouse.x = ((e.clientX - rect.left) / rect.width) * W;
   state.mouse.y = ((e.clientY - rect.top) / rect.height) * H;
   state.mouse.active = true;
+});
+canvas.addEventListener('mouseleave', () => {
+  state.mouse.active = false;
+  state.mouse.firing = false;
+});
+canvas.addEventListener('mousedown', (e) => {
+  unlockAudio();
+  if (e.button === 0) state.mouse.firing = true;
+  if (e.button === 2) useBomb();
+  if (state.scene === 'title' || state.scene === 'victory' || state.scene === 'gameover') resetGame();
+});
+canvas.addEventListener('mouseup', (e) => {
+  if (e.button === 0) state.mouse.firing = false;
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+loop();
+active = true;
 });
 canvas.addEventListener('mouseleave', () => {
   state.mouse.active = false;
