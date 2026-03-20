@@ -519,39 +519,7 @@ function updatePickupsAndEffects() {
   state.effects = state.effects.filter(fx => fx.life > 0);
 }
 
-function updateAudioLoop() {
-  if (audio.unlocked && audio.ctx) {
-    audio.bgmTimer -= 1;
-    if (audio.bgmTimer <= 0) {
-      const pattern = musicPatterns[audio.mode] || musicPatterns.title;
-      const freq = pattern[audio.bgmStep % pattern.length];
-      const type = audio.mode === 'boss' ? 'sawtooth' : (audio.mode === 'stage' ? 'square' : 'triangle');
-      const vol = audio.mode === 'boss' ? 0.065 : 0.035;
-      playTone(freq, audio.mode === 'boss' ? 0.18 : 0.22, type, vol);
-      if (audio.mode === 'stage' || audio.mode === 'boss') playTone(freq / 2, 0.2, 'triangle', audio.mode === 'boss' ? 0.03 : 0.02, 0.01);
-      if (audio.mode === 'boss' && audio.bgmStep % 2 === 0) playTone(freq * 1.5, 0.08, 'square', 0.03, 0.02);
-      audio.bgmStep += 1;
-      audio.bgmTimer = audio.mode === 'boss' ? 8 : 14;
-    }
-  }
-}
-
-function update() {
-  state.time += 1;
-  if (state.rumble > 0) state.rumble -= 1;
-
-  updateStars();
-
-  if (state.scene === 'paused') return;
-  if (state.scene !== 'playing') return;
-
-  state.stageTimer += 1;
-
-  updatePlayerMovement();
-  updatePlayerCombat();
-  updateStageSpawns();
-  updateBullets();
-
+function updateEnemies() {
   for (const e of state.enemies) {
     e.fireTimer -= 1;
     if (e.type === 'drone') {
@@ -636,9 +604,9 @@ function update() {
       }
     }
   }
+}
 
-  updatePickupsAndEffects();
-
+function handleBulletEnemyCollisions() {
   for (const b of state.bullets) {
     for (const e of state.enemies) {
       if (b.dead || e.dead) continue;
@@ -677,7 +645,9 @@ function update() {
   }
   state.bullets = state.bullets.filter(b => !b.dead);
   state.enemies = state.enemies.filter(e => !e.dead && e.y < H + 100 && e.x > -80 && e.x < W + 80);
+}
 
+function handlePlayerCollisions() {
   for (const b of state.enemyBullets) {
     if (Math.abs(b.x - player.x) < player.w / 2 && Math.abs(b.y - player.y) < player.h / 2) {
       b.dead = true;
@@ -706,12 +676,51 @@ function update() {
     }
   }
   state.pickups = state.pickups.filter(p => !p.dead);
+}
 
+function updateVictoryState() {
   if (state.bossDefeated) {
     state.victoryTimer -= 1;
     if (state.victoryTimer <= 0) state.scene = 'victory';
   }
+}
 
+function updateAudioLoop() {
+  if (audio.unlocked && audio.ctx) {
+    audio.bgmTimer -= 1;
+    if (audio.bgmTimer <= 0) {
+      const pattern = musicPatterns[audio.mode] || musicPatterns.title;
+      const freq = pattern[audio.bgmStep % pattern.length];
+      const type = audio.mode === 'boss' ? 'sawtooth' : (audio.mode === 'stage' ? 'square' : 'triangle');
+      const vol = audio.mode === 'boss' ? 0.065 : 0.035;
+      playTone(freq, audio.mode === 'boss' ? 0.18 : 0.22, type, vol);
+      if (audio.mode === 'stage' || audio.mode === 'boss') playTone(freq / 2, 0.2, 'triangle', audio.mode === 'boss' ? 0.03 : 0.02, 0.01);
+      if (audio.mode === 'boss' && audio.bgmStep % 2 === 0) playTone(freq * 1.5, 0.08, 'square', 0.03, 0.02);
+      audio.bgmStep += 1;
+      audio.bgmTimer = audio.mode === 'boss' ? 8 : 14;
+    }
+  }
+}
+
+function update() {
+  state.time += 1;
+  if (state.rumble > 0) state.rumble -= 1;
+
+  updateStars();
+
+  if (state.scene === 'paused') return;
+  if (state.scene !== 'playing') return;
+
+  state.stageTimer += 1;
+  updatePlayerMovement();
+  updatePlayerCombat();
+  updateStageSpawns();
+  updateBullets();
+  updateEnemies();
+  updatePickupsAndEffects();
+  handleBulletEnemyCollisions();
+  handlePlayerCollisions();
+  updateVictoryState();
   updateAudioLoop();
 }
 
