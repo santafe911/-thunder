@@ -177,6 +177,8 @@ function resetGame() {
   state.bossDefeated = false;
   state.victoryTimer = 0;
   state.rumble = 0;
+  state.phaseBanner = null;
+  state.phaseBannerTimer = 0;
   setMusicMode('stage');
   state.highScore = Number(localStorage.getItem('raidenClassicHighScore') || state.highScore || 0);
 
@@ -599,8 +601,10 @@ function updateEnemies() {
         e.x += e.moveDir * 1.6;
         if (e.x < 100 || e.x > W - 100) e.moveDir *= -1;
         e.patternTimer += 1;
+        const prevPhase = e.phase;
         if (e.hp < e.maxHp * 0.3) e.phase = 3;
         else if (e.hp < e.maxHp * 0.55) e.phase = 2;
+        if (e.phase !== prevPhase) triggerBossPhaseBanner(e.phase);
         if (e.fireTimer <= 0) {
           if (e.phase === 1) {
             enemyShoot(e, 'wide');
@@ -1008,6 +1012,23 @@ function render() {
   drawHUD();
   drawBossBar();
 
+  if (state.phaseBanner && state.phaseBannerTimer > 0 && state.scene === 'playing') {
+    const alpha = Math.min(1, state.phaseBannerTimer / 20);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(8, 16, 28, 0.75)';
+    ctx.fillRect(70, 86, W - 140, 48);
+    ctx.strokeStyle = '#ffd24d';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(70, 86, W - 140, 48);
+    ctx.fillStyle = '#fff1c1';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(state.phaseBanner, W / 2, 116);
+    ctx.restore();
+    ctx.textAlign = 'left';
+  }
+
   if (state.scene === 'title') {
     drawOverlay('钢翼雷霆', `单关经典雷电风爽玩版 / 最高分 ${state.highScore}`, '按 Enter / 点击开始');
   } else if (state.scene === 'paused') {
@@ -1063,6 +1084,12 @@ canvas.addEventListener('mousedown', (e) => {
   if (state.scene === 'title' || state.scene === 'victory' || state.scene === 'gameover') resetGame();
 });
 canvas.addEventListener('mouseup', (e) => {
+  if (e.button === 0) state.mouse.firing = false;
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+loop();
+r('mouseup', (e) => {
   if (e.button === 0) state.mouse.firing = false;
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
