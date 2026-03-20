@@ -61,6 +61,36 @@ const musicPatterns = {
   gameover: [220.0, 207.65, 196.0, 174.61, 164.81, 146.83, 130.81, 110.0],
 };
 
+const FIRE_COOLDOWNS = {
+  cannon: () => Math.max(4, 8 - player.power),
+  spread: () => 10,
+  laser: () => 7,
+  homing: () => 12,
+};
+
+const MISSILE_COOLDOWN = 42;
+const PICKUP_DROP_CHANCE = 0.22;
+const BOSS_SPAWN_TIME = 1900;
+
+const STAGE_SPAWNS = [
+  { type: 'drone', every: 55, until: 1650 },
+  { type: 'fighter', every: 150, offset: 80, until: 1550 },
+  { type: 'gunship', at: [300, 620, 980, 1320] },
+  { type: 'minibossA', at: [760] },
+  { type: 'minibossB', at: [1360] },
+];
+
+const ENEMY_CONFIG = {
+  drone: () => ({ x: 60 + Math.random() * (W - 120), y: -40, w: 24, h: 24, hp: 26, maxHp: 26, speed: 2.2, fireTimer: 60 + Math.random() * 60, score: 120 }),
+  fighter: () => {
+    const side = Math.random() > 0.5 ? 1 : -1;
+    return { x: side > 0 ? W + 30 : -30, y: 120 + Math.random() * 180, w: 28, h: 22, hp: 40, maxHp: 40, speed: 2.7, side, fireTimer: 50, wave: Math.random() * 1000, score: 180 };
+  },
+  gunship: () => ({ x: 60 + Math.random() * (W - 120), y: -50, w: 42, h: 32, hp: 180, maxHp: 180, speed: 1.15, fireTimer: 45, score: 900 }),
+  minibossA: () => ({ x: W / 2, y: -70, targetY: 140, w: 72, h: 56, hp: 420, maxHp: 420, speed: 1.3, fireTimer: 34, moveDir: 1, score: 2200 }),
+  minibossB: () => ({ x: W / 2, y: -70, targetY: 150, w: 84, h: 60, hp: 560, maxHp: 560, speed: 1.45, fireTimer: 28, moveDir: 1, score: 3200 }),
+};
+
 for (let i = 0; i < 90; i++) {
   state.stars.push({
     x: Math.random() * W,
@@ -315,23 +345,9 @@ function fireMissiles() {
 }
 
 function spawnEnemy(type) {
-  const x = 60 + Math.random() * (W - 120);
-  if (type === 'drone') {
-    state.enemies.push({ type, x, y: -40, w: 24, h: 24, hp: 26, maxHp: 26, speed: 2.2, fireTimer: 60 + Math.random() * 60, score: 120 });
-  }
-  if (type === 'fighter') {
-    const side = Math.random() > 0.5 ? 1 : -1;
-    state.enemies.push({ type, x: side > 0 ? W + 30 : -30, y: 120 + Math.random() * 180, w: 28, h: 22, hp: 40, maxHp: 40, speed: 2.7, side, fireTimer: 50, wave: Math.random() * 1000, score: 180 });
-  }
-  if (type === 'gunship') {
-    state.enemies.push({ type, x, y: -50, w: 42, h: 32, hp: 180, maxHp: 180, speed: 1.15, fireTimer: 45, score: 900 });
-  }
-  if (type === 'minibossA') {
-    state.enemies.push({ type, x: W / 2, y: -70, targetY: 140, w: 72, h: 56, hp: 420, maxHp: 420, speed: 1.3, fireTimer: 34, moveDir: 1, score: 2200 });
-  }
-  if (type === 'minibossB') {
-    state.enemies.push({ type, x: W / 2, y: -70, targetY: 150, w: 84, h: 60, hp: 560, maxHp: 560, speed: 1.45, fireTimer: 28, moveDir: 1, score: 3200 });
-  }
+  const factory = ENEMY_CONFIG[type];
+  if (!factory) return;
+  state.enemies.push({ type, ...factory() });
 }
 
 function spawnBoss() {
@@ -397,10 +413,7 @@ function useBomb() {
   }
 }
 
-function update() {
-  state.time += 1;
-  if (state.rumble > 0) state.rumble -= 1;
-
+function updateStars() {
   for (const s of state.stars) {
     s.y += s.speed;
     if (s.y > H) {
@@ -408,17 +421,15 @@ function update() {
       s.x = Math.random() * W;
     }
   }
+}
 
-  if (state.scene === 'paused') return;
-  if (state.scene !== 'playing') return;
-
-  state.stageTimer += 1;
-
-  let mx = 0, my = 0;
-  if (state.keys['ArrowLeft'] || state.keys['a']) mx -= 1;
-  if (state.keys['ArrowRight'] || state.keys['d']) mx += 1;
-  if (state.keys['ArrowUp'] || state.keys['w']) my -= 1;
-  if (state.keys['ArrowDown'] || state.keys['s']) my += 1;
+function updatePlayerMovement() {
+  let mx = 0;
+  let my = 0;
+  if (state.keys['ArrowLeft'] || state.keys.a) mx -= 1;
+  if (state.keys['ArrowRight'] || state.keys.d) mx += 1;
+  if (state.keys['ArrowUp'] || state.keys.w) my -= 1;
+  if (state.keys['ArrowDown'] || state.keys.s) my += 1;
 
   if (state.mouse.active) {
     player.x += (state.mouse.x - player.x) * 0.18;
@@ -430,37 +441,46 @@ function update() {
 
   player.x = clamp(player.x, 26, W - 26);
   player.y = clamp(player.y, 40, H - 40);
+}
 
+function updatePlayerCombat() {
   if (player.fireCooldown > 0) player.fireCooldown -= 1;
   if (player.missileCooldown > 0) player.missileCooldown -= 1;
   if (player.invuln > 0) player.invuln -= 1;
   if (player.respawnTimer > 0) player.respawnTimer -= 1;
 
-  const firing = state.keys['j'] || state.keys[' '] || state.mouse.firing;
+  const firing = state.keys.j || state.keys[' '] || state.mouse.firing;
   if (firing && player.fireCooldown <= 0) {
     shootPlayer();
-    if (player.weapon === 'cannon') player.fireCooldown = Math.max(4, 8 - player.power);
-    else if (player.weapon === 'spread') player.fireCooldown = 10;
-    else if (player.weapon === 'laser') player.fireCooldown = 7;
-    else player.fireCooldown = 12;
+    player.fireCooldown = (FIRE_COOLDOWNS[player.weapon] || FIRE_COOLDOWNS.homing)();
   }
-  if (state.scene === 'playing' && player.missileCooldown <= 0 && state.enemies.length > 0) {
+  if (player.missileCooldown <= 0 && state.enemies.length > 0) {
     fireMissiles();
-    player.missileCooldown = 42;
+    player.missileCooldown = MISSILE_COOLDOWN;
   }
+}
 
-  if (!state.bossSpawned) {
-    if (state.stageTimer % 55 === 0 && state.stageTimer < 1650) spawnEnemy('drone');
-    if (state.stageTimer % 150 === 80 && state.stageTimer < 1550) spawnEnemy('fighter');
-    if ([300, 620, 980, 1320].includes(state.stageTimer)) spawnEnemy('gunship');
-    if (state.stageTimer === 760) spawnEnemy('minibossA');
-    if (state.stageTimer === 1360) spawnEnemy('minibossB');
-    if (state.stageTimer > 1900) {
-      state.bossSpawned = true;
-      spawnBoss();
+function updateStageSpawns() {
+  if (state.bossSpawned) return;
+  for (const spawn of STAGE_SPAWNS) {
+    if (spawn.every) {
+      const offset = spawn.offset || 0;
+      if (state.stageTimer % spawn.every === offset && state.stageTimer < spawn.until) {
+        spawnEnemy(spawn.type);
+      }
+      continue;
+    }
+    if (spawn.at && spawn.at.includes(state.stageTimer)) {
+      spawnEnemy(spawn.type);
     }
   }
+  if (state.stageTimer > BOSS_SPAWN_TIME) {
+    state.bossSpawned = true;
+    spawnBoss();
+  }
+}
 
+function updateBullets() {
   for (const b of state.bullets) {
     if (b.kind === 'missile' || b.kind === 'homing') {
       if (b.target && !b.target.dead) {
@@ -485,6 +505,52 @@ function update() {
     b.y += b.vy;
   }
   state.enemyBullets = state.enemyBullets.filter(b => b.y < H + 40 && b.x > -30 && b.x < W + 30);
+}
+
+function updatePickupsAndEffects() {
+  for (const p of state.pickups) p.y += p.vy;
+  state.pickups = state.pickups.filter(p => p.y < H + 30);
+
+  for (const fx of state.effects) {
+    fx.x += fx.vx;
+    fx.y += fx.vy;
+    fx.life -= 1;
+  }
+  state.effects = state.effects.filter(fx => fx.life > 0);
+}
+
+function updateAudioLoop() {
+  if (audio.unlocked && audio.ctx) {
+    audio.bgmTimer -= 1;
+    if (audio.bgmTimer <= 0) {
+      const pattern = musicPatterns[audio.mode] || musicPatterns.title;
+      const freq = pattern[audio.bgmStep % pattern.length];
+      const type = audio.mode === 'boss' ? 'sawtooth' : (audio.mode === 'stage' ? 'square' : 'triangle');
+      const vol = audio.mode === 'boss' ? 0.065 : 0.035;
+      playTone(freq, audio.mode === 'boss' ? 0.18 : 0.22, type, vol);
+      if (audio.mode === 'stage' || audio.mode === 'boss') playTone(freq / 2, 0.2, 'triangle', audio.mode === 'boss' ? 0.03 : 0.02, 0.01);
+      if (audio.mode === 'boss' && audio.bgmStep % 2 === 0) playTone(freq * 1.5, 0.08, 'square', 0.03, 0.02);
+      audio.bgmStep += 1;
+      audio.bgmTimer = audio.mode === 'boss' ? 8 : 14;
+    }
+  }
+}
+
+function update() {
+  state.time += 1;
+  if (state.rumble > 0) state.rumble -= 1;
+
+  updateStars();
+
+  if (state.scene === 'paused') return;
+  if (state.scene !== 'playing') return;
+
+  state.stageTimer += 1;
+
+  updatePlayerMovement();
+  updatePlayerCombat();
+  updateStageSpawns();
+  updateBullets();
 
   for (const e of state.enemies) {
     e.fireTimer -= 1;
@@ -571,15 +637,7 @@ function update() {
     }
   }
 
-  for (const p of state.pickups) p.y += p.vy;
-  state.pickups = state.pickups.filter(p => p.y < H + 30);
-
-  for (const fx of state.effects) {
-    fx.x += fx.vx;
-    fx.y += fx.vy;
-    fx.life -= 1;
-  }
-  state.effects = state.effects.filter(fx => fx.life > 0);
+  updatePickupsAndEffects();
 
   for (const b of state.bullets) {
     for (const e of state.enemies) {
@@ -592,7 +650,7 @@ function update() {
           e.dead = true;
           state.score += e.score;
           spawnEffect(e.x, e.y, e.type === 'boss' ? '#ff4e39' : '#ff9f43', e.type === 'boss' ? 40 : 20, e.type === 'boss' ? 40 : 16);
-          if (Math.random() < 0.22 && e.type !== 'boss') {
+          if (Math.random() < PICKUP_DROP_CHANCE && e.type !== 'boss') {
             let kind = 'power';
             const roll = Math.random();
             if (roll > 0.82) kind = 'bomb';
@@ -654,20 +712,7 @@ function update() {
     if (state.victoryTimer <= 0) state.scene = 'victory';
   }
 
-  if (audio.unlocked && audio.ctx) {
-    audio.bgmTimer -= 1;
-    if (audio.bgmTimer <= 0) {
-      const pattern = musicPatterns[audio.mode] || musicPatterns.title;
-      const freq = pattern[audio.bgmStep % pattern.length];
-      const type = audio.mode === 'boss' ? 'sawtooth' : (audio.mode === 'stage' ? 'square' : 'triangle');
-      const vol = audio.mode === 'boss' ? 0.065 : 0.035;
-      playTone(freq, audio.mode === 'boss' ? 0.18 : 0.22, type, vol);
-      if (audio.mode === 'stage' || audio.mode === 'boss') playTone(freq / 2, 0.2, 'triangle', audio.mode === 'boss' ? 0.03 : 0.02, 0.01);
-      if (audio.mode === 'boss' && audio.bgmStep % 2 === 0) playTone(freq * 1.5, 0.08, 'square', 0.03, 0.02);
-      audio.bgmStep += 1;
-      audio.bgmTimer = audio.mode === 'boss' ? 8 : 14;
-    }
-  }
+  updateAudioLoop();
 }
 
 function drawShip(x, y, color = '#5fd1ff') {
