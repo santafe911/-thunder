@@ -36,6 +36,7 @@ const player = {
   bombs: 3,
   power: 1,
   weapon: 'cannon',
+  weaponLevels: { cannon: 1, spread: 1, laser: 1, homing: 1 },
   fireCooldown: 0,
   missileCooldown: 0,
   invuln: 0,
@@ -221,6 +222,7 @@ function spawnEffect(x, y, color = '#ff9d2e', size = 16, count = 8) {
 }
 
 function shootPlayer() {
+  const weaponLevel = getWeaponLevel();
   if (player.weapon === 'cannon') {
     const base = [
       { x: player.x, y: player.y - 18, vx: 0, vy: -9 },
@@ -289,7 +291,7 @@ function shootPlayer() {
         kind: 'homing',
         target,
         r: 4,
-        damage: 15,
+        damage: weaponLevel >= 3 ? 19 : 15,
         color: '#7fd4ff',
       });
     }
@@ -837,7 +839,7 @@ function drawHUD() {
   ctx.fillText(`LIFE ${Math.max(0, player.lives)}`, 18, 66);
   ctx.fillText(`BOMB ${player.bombs}`, 18, 84);
   ctx.fillText(`POWER ${player.power}`, 18, 102);
-  ctx.fillText(`WEAPON ${player.weapon.toUpperCase()}`, 18, 120);
+  ctx.fillText(`WEAPON ${player.weapon.toUpperCase()} Lv.${getWeaponLevel()}`, 18, 120);
   ctx.fillText(`SOUND ${audio.muted ? 'OFF' : 'ON'}`, 18, 138);
 
   ctx.fillStyle = '#1d283f';
