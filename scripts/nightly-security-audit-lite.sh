@@ -22,13 +22,13 @@ done
 if [[ ${#auth_sources[@]} -eq 0 ]]; then
   echo "No auth log found (/var/log/secure or /var/log/auth.log)."
 else
-  grep -hEi 'Failed password|Invalid user|authentication failure|Disconnected from invalid user|Connection closed by authenticating user' "${auth_sources[@]}" 2>/dev/null | tail -n 200 || true
+  { grep -hEi 'Failed password|Invalid user|authentication failure|Disconnected from invalid user|Connection closed by authenticating user' "${auth_sources[@]}" 2>/dev/null || true; } | tail -n 200
 fi
 echo
 
 echo "[SSHD WARNINGS/ERRORS]"
 if command -v journalctl >/dev/null 2>&1; then
-  journalctl -u sshd -u ssh --since '24 hours ago' --no-pager 2>/dev/null | tail -n 200 || true
+  { journalctl -u sshd -u ssh --since '24 hours ago' --no-pager 2>/dev/null || true; } | tail -n 200
 else
   echo "journalctl not available."
 fi
@@ -67,9 +67,9 @@ echo
 
 echo "[RECENT SUDO]"
 if [[ -f /var/log/secure ]]; then
-  grep -i 'sudo' /var/log/secure | tail -n 100 || true
+  { grep -i 'sudo' /var/log/secure || true; } | tail -n 100
 elif [[ -f /var/log/auth.log ]]; then
-  grep -i 'sudo' /var/log/auth.log | tail -n 100 || true
+  { grep -i 'sudo' /var/log/auth.log || true; } | tail -n 100
 else
   echo "No auth log found for sudo scan."
 fi
@@ -86,14 +86,14 @@ done
 echo
 
 echo "[WORLD-WRITABLE UNDER ~/.openclaw]"
-find "$HOME/.openclaw" -xdev \( -type f -o -type d \) -perm -0002 -print 2>/dev/null | head -n 200 || true
+{ find "$HOME/.openclaw" -xdev \( -type f -o -type d \) -perm -0002 -print 2>/dev/null || true; } | head -n 200
 echo
 
 echo "[PACKAGE UPDATE SUMMARY]"
 if command -v dnf >/dev/null 2>&1; then
-  dnf check-update 2>/dev/null | tail -n 200 || true
+  { dnf check-update 2>/dev/null || true; } | tail -n 200
 elif command -v apt >/dev/null 2>&1; then
-  apt list --upgradable 2>/dev/null | tail -n 200 || true
+  { apt list --upgradable 2>/dev/null || true; } | tail -n 200
 else
   echo "No supported package manager found."
 fi
@@ -105,15 +105,15 @@ echo
 
 echo "[PERSISTENCE CHECK]"
 echo "-- systemd services (enabled) --"
-systemctl list-unit-files --type=service --state=enabled 2>/dev/null | tail -n 200 || true
+{ systemctl list-unit-files --type=service --state=enabled 2>/dev/null || true; } | tail -n 200
 echo "-- user crontab --"
 crontab -l 2>/dev/null || echo "No user crontab."
 echo "-- /etc/cron* --"
-find /etc/cron* -maxdepth 2 -type f 2>/dev/null | sort | tail -n 200 || true
+{ find /etc/cron* -maxdepth 2 -type f 2>/dev/null || true; } | sort | tail -n 200
 echo
 
 echo "[LAST LOGINS]"
-last -a | head -n 50 || true
+{ last -a || true; } | head -n 50
 echo
 
 echo "[RECENT CONNECTIONS]"
