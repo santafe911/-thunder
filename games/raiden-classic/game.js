@@ -17,9 +17,12 @@ const state = {
   time: 0,
   score: 0,
   highScore: Number(localStorage.getItem('raidenClassicHighScore') || 0),
+  stageIndex: 1,
   stageTimer: 0,
   bossSpawned: false,
   bossDefeated: false,
+  stageClearTimer: 0,
+  stageBannerTimer: 0,
   victoryTimer: 0,
   rumble: 0,
 };
@@ -131,6 +134,8 @@ function setMusicMode(mode) {
   audio.bgmStep = 0;
 }
 
+const STAGE_BANNER_DURATION = 150;
+
 function resetGame() {
   unlockAudio();
   state.scene = 'playing';
@@ -140,10 +145,13 @@ function resetGame() {
   state.effects = [];
   state.pickups = [];
   state.time = 0;
+  state.stageIndex = 1;
   state.stageTimer = 0;
   state.score = 0;
   state.bossSpawned = false;
   state.bossDefeated = false;
+  state.stageClearTimer = 0;
+  state.stageBannerTimer = STAGE_BANNER_DURATION;
   state.victoryTimer = 0;
   state.rumble = 0;
   setMusicMode('stage');
@@ -326,6 +334,13 @@ function spawnEnemy(type) {
   if (type === 'gunship') {
     state.enemies.push({ type, x, y: -50, w: 42, h: 32, hp: 180, maxHp: 180, speed: 1.15, fireTimer: 45, score: 900 });
   }
+  if (type === 'interceptor') {
+    const side = Math.random() > 0.5 ? 1 : -1;
+    state.enemies.push({ type, x: side > 0 ? W + 36 : -36, y: 80 + Math.random() * 140, w: 30, h: 20, hp: 56, maxHp: 56, speed: 3.8, side, fireTimer: 34, wave: Math.random() * 1000, dashTimer: 44, score: 260 });
+  }
+  if (type === 'turretShip') {
+    state.enemies.push({ type, x, y: -60, w: 48, h: 36, hp: 240, maxHp: 240, speed: 1.05, fireTimer: 32, volley: 0, score: 1200 });
+  }
   if (type === 'minibossA') {
     state.enemies.push({ type, x: W / 2, y: -70, targetY: 140, w: 72, h: 56, hp: 420, maxHp: 420, speed: 1.3, fireTimer: 34, moveDir: 1, score: 2200 });
   }
@@ -338,21 +353,87 @@ function spawnBoss() {
   playSfx('boss');
   playSfx('alarm');
   setMusicMode('boss');
-  state.enemies.push({
-    type: 'boss',
-    x: W / 2,
-    y: -120,
-    targetY: 130,
-    w: 140,
-    h: 96,
-    hp: 1800,
-    maxHp: 1800,
-    fireTimer: 80,
-    patternTimer: 0,
-    phase: 1,
-    moveDir: 1,
-    score: 8000,
-  });
+  if (state.stageIndex === 1) {
+    state.enemies.push({
+      type: 'boss',
+      x: W / 2,
+      y: -120,
+      targetY: 130,
+      w: 140,
+      h: 96,
+      hp: 1800,
+      maxHp: 1800,
+      fireTimer: 80,
+      patternTimer: 0,
+      phase: 1,
+      moveDir: 1,
+      score: 8000,
+      label: '最终兵器：巨鲨级空中要塞',
+    });
+  } else {
+    state.enemies.push({
+      type: 'boss2',
+      x: W / 2,
+      y: -140,
+      targetY: 118,
+      w: 152,
+      h: 108,
+      hp: 2600,
+      maxHp: 2600,
+      fireTimer: 70,
+      patternTimer: 0,
+      phase: 1,
+      moveDir: 1,
+      score: 14000,
+      label: '第二关Boss：猩红风暴母舰',
+    });
+  }
+}
+
+function startNextStage() {
+  state.stageIndex = 2;
+  state.stageTimer = 0;
+  state.bossSpawned = false;
+  state.bossDefeated = false;
+  state.stageClearTimer = 0;
+  state.stageBannerTimer = STAGE_BANNER_DURATION;
+  state.enemyBullets = [];
+  state.bullets = [];
+  state.pickups = [];
+  state.effects = [];
+  player.hp = Math.min(player.maxHp, player.hp + 35);
+  player.bombs = Math.min(5, player.bombs + 1);
+  player.invuln = Math.max(player.invuln, 120);
+  player.x = W / 2;
+  player.y = H - 110;
+  setMusicMode('stage');
+}
+
+function updateStageSpawns() {
+  if (state.stageIndex === 1) {
+    if (state.stageTimer % 55 === 0 && state.stageTimer < 1650) spawnEnemy('drone');
+    if (state.stageTimer % 150 === 80 && state.stageTimer < 1550) spawnEnemy('fighter');
+    if ([300, 620, 980, 1320].includes(state.stageTimer)) spawnEnemy('gunship');
+    if (state.stageTimer === 760) spawnEnemy('minibossA');
+    if (state.stageTimer === 1360) spawnEnemy('minibossB');
+    if (state.stageTimer > 1900) {
+      state.bossSpawned = true;
+      spawnBoss();
+    }
+    return;
+  }
+
+  if (state.stageTimer % 48 === 0 && state.stageTimer < 1780) spawnEnemy('drone');
+  if (state.stageTimer % 130 === 50 && state.stageTimer < 1650) spawnEnemy('fighter');
+  if (state.stageTimer % 190 === 100 && state.stageTimer < 1680) spawnEnemy('interceptor');
+  if ([260, 540, 860, 1180, 1500].includes(state.stageTimer)) spawnEnemy('turretShip');
+  if (state.stageTimer === 700) spawnEnemy('minibossA');
+  if (state.stageTimer === 1080) spawnEnemy('minibossB');
+  if (state.stageTimer === 1280 || state.stageTimer === 1440) spawnEnemy('interceptor');
+  if (state.stageTimer > 1980) {
+    state.bossSpawned = true;
+    spawnBoss();
+  }
 }
 
 function rectsOverlap(a, b) {
@@ -392,7 +473,7 @@ function useBomb() {
   state.rumble = 20;
   spawnEffect(player.x, player.y, '#7be7ff', 40, 42);
   for (const e of state.enemies) {
-    if (e.type === 'boss') e.hp -= 180;
+    if (e.type === 'boss' || e.type === 'boss2') e.hp -= 180;
     else e.hp -= 999;
   }
 }
@@ -413,6 +494,7 @@ function update() {
   if (state.scene !== 'playing') return;
 
   state.stageTimer += 1;
+  if (state.stageBannerTimer > 0) state.stageBannerTimer -= 1;
 
   let mx = 0, my = 0;
   if (state.keys['ArrowLeft'] || state.keys['a']) mx -= 1;
@@ -449,17 +531,7 @@ function update() {
     player.missileCooldown = 42;
   }
 
-  if (!state.bossSpawned) {
-    if (state.stageTimer % 55 === 0 && state.stageTimer < 1650) spawnEnemy('drone');
-    if (state.stageTimer % 150 === 80 && state.stageTimer < 1550) spawnEnemy('fighter');
-    if ([300, 620, 980, 1320].includes(state.stageTimer)) spawnEnemy('gunship');
-    if (state.stageTimer === 760) spawnEnemy('minibossA');
-    if (state.stageTimer === 1360) spawnEnemy('minibossB');
-    if (state.stageTimer > 1900) {
-      state.bossSpawned = true;
-      spawnBoss();
-    }
-  }
+  if (!state.bossSpawned) updateStageSpawns();
 
   for (const b of state.bullets) {
     if (b.kind === 'missile' || b.kind === 'homing') {
@@ -506,6 +578,29 @@ function update() {
       if (e.fireTimer <= 0) {
         enemyShoot(e, 'wide');
         e.fireTimer = 45;
+      }
+    } else if (e.type === 'interceptor') {
+      e.x += e.side * e.speed;
+      e.y += Math.sin((state.time + e.wave) * 0.09) * 2.4;
+      e.dashTimer -= 1;
+      if (e.dashTimer <= 0) {
+        enemyShoot(e, 'aim');
+        enemyShoot(e, 'spread');
+        e.dashTimer = 52;
+        e.fireTimer = Math.min(e.fireTimer, 20);
+      }
+      if (e.fireTimer <= 0) {
+        enemyShoot(e, 'aim');
+        e.fireTimer = 34;
+      }
+    } else if (e.type === 'turretShip') {
+      e.y += e.speed;
+      if (e.fireTimer <= 0) {
+        enemyShoot(e, e.volley % 2 === 0 ? 'wide' : 'spread');
+        enemyShoot({ x: e.x - 18, y: e.y + 6 }, 'aim');
+        enemyShoot({ x: e.x + 18, y: e.y + 6 }, 'aim');
+        e.volley += 1;
+        e.fireTimer = e.volley % 3 === 0 ? 18 : 34;
       }
     } else if (e.type === 'minibossA' || e.type === 'minibossB') {
       if (e.y < e.targetY) {
@@ -568,6 +663,53 @@ function update() {
           }
         }
       }
+    } else if (e.type === 'boss2') {
+      if (e.y < e.targetY) {
+        e.y += 2.1;
+      } else {
+        e.patternTimer += 1;
+        e.x += e.moveDir * (e.phase >= 3 ? 2.6 : 2.0);
+        if (e.x < 96 || e.x > W - 96) e.moveDir *= -1;
+        if (e.hp < e.maxHp * 0.18) e.phase = 4;
+        else if (e.hp < e.maxHp * 0.42) e.phase = 3;
+        else if (e.hp < e.maxHp * 0.68) e.phase = 2;
+        if (e.fireTimer <= 0) {
+          if (e.phase === 1) {
+            enemyShoot(e, 'wide');
+            enemyShoot({ x: e.x - 44, y: e.y + 14 }, 'aim');
+            enemyShoot({ x: e.x + 44, y: e.y + 14 }, 'aim');
+            e.fireTimer = 28;
+          } else if (e.phase === 2) {
+            enemyShoot(e, 'wide');
+            enemyShoot({ x: e.x - 56, y: e.y + 18 }, 'wide');
+            enemyShoot({ x: e.x + 56, y: e.y + 18 }, 'wide');
+            for (let i = 0; i < 5; i++) {
+              const angle = (-0.9 + i * 0.45) + Math.PI / 2;
+              state.enemyBullets.push({ x: e.x, y: e.y + 20, vx: Math.cos(angle) * 3.2, vy: Math.sin(angle) * 3.2, r: 5, color: '#ff76e1', damage: 13 });
+            }
+            e.fireTimer = 18;
+          } else if (e.phase === 3) {
+            for (let i = 0; i < 2; i++) {
+              const originX = e.x + (i === 0 ? -60 : 60);
+              enemyShoot({ x: originX, y: e.y + 18 }, 'wide');
+              enemyShoot({ x: originX, y: e.y + 18 }, 'spread');
+            }
+            enemyShoot(e, 'aim');
+            state.enemyBullets.push({ x: e.x, y: e.y + 28, vx: 0, vy: 5.6, r: 8, color: '#ffd54f', damage: 20 });
+            e.fireTimer = 12;
+          } else {
+            for (let ring = 0; ring < 2; ring++) {
+              for (let i = 0; i < 8; i++) {
+                const angle = (e.patternTimer * 0.08) + ring * 0.22 + i * (Math.PI * 2 / 8);
+                state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * (2.4 + ring * 0.7), vy: Math.sin(angle) * (2.4 + ring * 0.7), r: 5, color: ring === 0 ? '#ff4fd8' : '#ffd54f', damage: 15 });
+              }
+            }
+            enemyShoot({ x: e.x - 64, y: e.y + 10 }, 'aim');
+            enemyShoot({ x: e.x + 64, y: e.y + 10 }, 'aim');
+            e.fireTimer = 10;
+          }
+        }
+      }
     }
   }
 
@@ -591,8 +733,9 @@ function update() {
         if (e.hp <= 0) {
           e.dead = true;
           state.score += e.score;
-          spawnEffect(e.x, e.y, e.type === 'boss' ? '#ff4e39' : '#ff9f43', e.type === 'boss' ? 40 : 20, e.type === 'boss' ? 40 : 16);
-          if (Math.random() < 0.22 && e.type !== 'boss') {
+          const isBoss = e.type === 'boss' || e.type === 'boss2';
+          spawnEffect(e.x, e.y, isBoss ? '#ff4e39' : '#ff9f43', isBoss ? 40 : 20, isBoss ? 40 : 16);
+          if (Math.random() < 0.22 && !isBoss) {
             let kind = 'power';
             const roll = Math.random();
             if (roll > 0.82) kind = 'bomb';
@@ -602,7 +745,7 @@ function update() {
             state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind, weapon });
           }
           playSfx('explode');
-          if (e.type === 'boss') {
+          if (isBoss) {
             playSfx('bossExplode');
             state.rumble = 40;
             for (let i = 0; i < 8; i++) {
@@ -610,8 +753,13 @@ function update() {
             }
             saveHighScore();
             state.bossDefeated = true;
-            state.victoryTimer = 180;
-            setMusicMode('victory');
+            if (state.stageIndex === 1) {
+              state.stageClearTimer = 160;
+              setMusicMode('stage');
+            } else {
+              state.victoryTimer = 180;
+              setMusicMode('victory');
+            }
           }
         }
       }
@@ -650,8 +798,13 @@ function update() {
   state.pickups = state.pickups.filter(p => !p.dead);
 
   if (state.bossDefeated) {
-    state.victoryTimer -= 1;
-    if (state.victoryTimer <= 0) state.scene = 'victory';
+    if (state.stageIndex === 1) {
+      state.stageClearTimer -= 1;
+      if (state.stageClearTimer <= 0) startNextStage();
+    } else {
+      state.victoryTimer -= 1;
+      if (state.victoryTimer <= 0) state.scene = 'victory';
+    }
   }
 
   if (audio.unlocked && audio.ctx) {
@@ -713,6 +866,22 @@ function drawEnemy(e) {
     ctx.fillStyle = '#ffcf53';
     ctx.fillRect(x - 14, y + 10, 8, 4);
     ctx.fillRect(x + 6, y + 10, 8, 4);
+  } else if (e.type === 'interceptor') {
+    ctx.fillStyle = '#79f0ff';
+    ctx.fillRect(x - 13, y - 5, 26, 10);
+    ctx.fillStyle = '#174c63';
+    ctx.fillRect(x - 5, y - 9, 10, 18);
+    ctx.fillStyle = '#ff7a59';
+    ctx.fillRect(x - 15, y + 4, 6, 3);
+    ctx.fillRect(x + 9, y + 4, 6, 3);
+  } else if (e.type === 'turretShip') {
+    ctx.fillStyle = '#c44dff';
+    ctx.fillRect(x - 20, y - 14, 40, 28);
+    ctx.fillStyle = '#312046';
+    ctx.fillRect(x - 8, y - 18, 16, 36);
+    ctx.fillStyle = '#ffd24d';
+    ctx.fillRect(x - 20, y - 4, 7, 7);
+    ctx.fillRect(x + 13, y - 4, 7, 7);
   } else if (e.type === 'minibossA' || e.type === 'minibossB') {
     ctx.fillStyle = e.type === 'minibossA' ? '#6f7cff' : '#ff7b59';
     ctx.fillRect(x - 30, y - 20, 60, 40);
@@ -746,9 +915,30 @@ function drawEnemy(e) {
     ctx.fillStyle = '#222b38';
     ctx.fillRect(x - 74, y + 12, 12, 10);
     ctx.fillRect(x + 62, y + 12, 12, 10);
+  } else if (e.type === 'boss2') {
+    ctx.fillStyle = '#8f5d7f';
+    ctx.fillRect(x - 70, y - 34, 140, 68);
+    ctx.fillRect(x - 28, y - 52, 56, 16);
+    ctx.fillRect(x - 92, y - 10, 22, 26);
+    ctx.fillRect(x + 70, y - 10, 22, 26);
+    ctx.fillStyle = '#4f2646';
+    ctx.fillRect(x - 56, y - 24, 112, 48);
+    ctx.fillStyle = '#261729';
+    ctx.fillRect(x - 18, y - 20, 36, 40);
+    ctx.fillStyle = '#ff7f66';
+    ctx.fillRect(x - 60, y - 12, 18, 26);
+    ctx.fillRect(x + 42, y - 12, 18, 26);
+    ctx.fillStyle = '#ffd24d';
+    ctx.fillRect(x - 12, y - 32, 24, 8);
+    ctx.fillStyle = '#ff9de1';
+    ctx.fillRect(x - 42, y - 8, 12, 8);
+    ctx.fillRect(x + 30, y - 8, 12, 8);
+    ctx.fillStyle = '#1d1624';
+    ctx.fillRect(x - 82, y + 12, 12, 10);
+    ctx.fillRect(x + 70, y + 12, 12, 10);
   }
 
-  if (e.type !== 'boss') {
+  if (e.type !== 'boss' && e.type !== 'boss2') {
     const ratio = Math.max(0, e.hp / e.maxHp);
     ctx.fillStyle = '#210b12';
     ctx.fillRect(x - 16, y - e.h / 2 - 10, 32, 4);
@@ -758,7 +948,7 @@ function drawEnemy(e) {
 }
 
 function drawBossBar() {
-  const boss = state.enemies.find(e => e.type === 'boss');
+  const boss = state.enemies.find(e => e.type === 'boss' || e.type === 'boss2');
   if (!boss) return;
   const ratio = Math.max(0, boss.hp / boss.maxHp);
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -769,12 +959,13 @@ function drawBossBar() {
   ctx.fillRect(64, 38, (W - 128) * ratio, 10);
   ctx.fillStyle = '#fff1c1';
   ctx.font = 'bold 12px sans-serif';
-  ctx.fillText('最终兵器：巨鲨级空中要塞', 64, 28);
+  ctx.fillText(boss.label || 'BOSS', 64, 28);
 }
+
 
 function drawHUD() {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(10, 10, 178, 144);
+  ctx.fillRect(10, 10, 178, 164);
   ctx.fillStyle = '#d4ecff';
   ctx.font = 'bold 14px sans-serif';
   ctx.fillText(`SCORE ${state.score}`, 18, 30);
@@ -784,6 +975,7 @@ function drawHUD() {
   ctx.fillText(`POWER ${player.power}`, 18, 102);
   ctx.fillText(`WEAPON ${player.weapon.toUpperCase()}`, 18, 120);
   ctx.fillText(`SOUND ${audio.muted ? 'OFF' : 'ON'}`, 18, 138);
+  ctx.fillText(`STAGE ${state.stageIndex}`, 18, 156);
 
   ctx.fillStyle = '#1d283f';
   ctx.fillRect(W - 150, 18, 120, 12);
@@ -903,8 +1095,16 @@ function render() {
   drawHUD();
   drawBossBar();
 
+  if (state.scene === 'playing' && state.stageBannerTimer > 0) {
+    const alpha = Math.min(1, state.stageBannerTimer / STAGE_BANNER_DURATION + 0.15);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawOverlay(`STAGE ${state.stageIndex}`, state.stageIndex === 1 ? '突入外层防线' : '进入火山云海空域', state.stageIndex === 1 ? '清理杂兵并击落空中要塞' : '敌军主力舰队开始反扑');
+    ctx.restore();
+  }
+
   if (state.scene === 'title') {
-    drawOverlay('钢翼雷霆', `单关经典雷电风爽玩版 / 最高分 ${state.highScore}`, '按 Enter / 点击开始');
+    drawOverlay('钢翼雷霆', `双关卡经典雷电风爽玩版 / 最高分 ${state.highScore}`, '按 Enter / 点击开始');
   } else if (state.scene === 'paused') {
     drawOverlay('战术暂停', '按 P 继续作战 / 按 M 静音切换', '当前战局已冻结');
   } else if (state.scene === 'victory') {
