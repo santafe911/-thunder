@@ -7,6 +7,7 @@
 - 建立 references 索引与研究类任务的交替式提取流程
 
 ## Recent Decisions (WAL)
+- 2026-03-23 12:07 UTC | raiden-github-push | Leo 决定：本轮第二关实测与微调完成后，直接提交到 GitHub | 影响：本轮完成后需执行 git push 对外同步
 - 2026-03-23 11:37 UTC | collaboration-terminology | Leo 纠正：当前对齐的是“三人协作/两层Agent架构”，不是“写稿子/写作架构” | 影响：后续群内表述、SOP 与公告统一使用“协作架构”表述
 - 2026-03-23 02:38 UTC | two-layer-agent | 确定两层架构原则：所有复杂任务先进入主控；主控决定是否派发给 mini；mini 负责执行、沉淀、回报 | 影响：影响主控/执行层职责边界、任务路由与知识同步策略
 - 2026-03-22 12:24 UTC | ssh-brute-guard | 执行 sudo bash ~/.openclaw/workspace/scripts/ssh-brute-guard.sh | 影响：影响：cron任务输出

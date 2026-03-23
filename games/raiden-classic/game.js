@@ -481,14 +481,14 @@ function updateStageSpawns() {
   if (state.stageTimer === 660) spawnEnemy('minibossA');
 
   if (state.stageTimer >= 920 && state.stageTimer < 1560) {
-    if (state.stageTimer % 68 === 0) spawnEnemy('drone');
-    if (state.stageTimer % 148 === 56) spawnEnemy('fighter');
-    if (state.stageTimer % 210 === 110) spawnEnemy('interceptor');
-    if ([980, 1220, 1460].includes(state.stageTimer)) spawnEnemy('turretShip');
+    if (state.stageTimer % 76 === 0) spawnEnemy('drone');
+    if (state.stageTimer % 156 === 56) spawnEnemy('fighter');
+    if (state.stageTimer % 224 === 110) spawnEnemy('interceptor');
+    if ([980, 1280, 1480].includes(state.stageTimer)) spawnEnemy('turretShip');
   }
 
-  if (state.stageTimer === 1180) spawnEnemy('minibossB');
-  if ([1340, 1500].includes(state.stageTimer)) spawnEnemy('interceptor');
+  if (state.stageTimer === 1200) spawnEnemy('minibossB');
+  if ([1360, 1520].includes(state.stageTimer)) spawnEnemy('interceptor');
 
   if (state.stageTimer > 1840) {
     state.bossSpawned = true;
@@ -766,14 +766,16 @@ function update() {
             e.fireTimer = 16;
           } else {
             for (let ring = 0; ring < 2; ring++) {
-              for (let i = 0; i < 7; i++) {
-                const angle = (e.patternTimer * 0.075) + ring * 0.26 + i * (Math.PI * 2 / 7);
-                state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * (2.2 + ring * 0.6), vy: Math.sin(angle) * (2.2 + ring * 0.6), r: 5, color: ring === 0 ? '#ff4fd8' : '#ffd54f', damage: 15 });
+              for (let i = 0; i < 6; i++) {
+                const angle = (e.patternTimer * 0.068) + ring * 0.22 + i * (Math.PI * 2 / 6);
+                state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * (2.0 + ring * 0.55), vy: Math.sin(angle) * (2.0 + ring * 0.55), r: ring === 0 ? 5 : 6, color: ring === 0 ? '#ff4fd8' : '#ffd54f', damage: ring === 0 ? 14 : 15 });
               }
             }
-            enemyShoot({ x: e.x - 64, y: e.y + 10 }, 'aim');
-            enemyShoot({ x: e.x + 64, y: e.y + 10 }, 'aim');
-            e.fireTimer = 12;
+            if (e.patternTimer % 24 < 12) {
+              enemyShoot({ x: e.x - 64, y: e.y + 10 }, 'aim');
+              enemyShoot({ x: e.x + 64, y: e.y + 10 }, 'aim');
+            }
+            e.fireTimer = 14;
           }
         }
       }
@@ -802,12 +804,12 @@ function update() {
           state.score += e.score;
           const isBoss = e.type === 'boss' || e.type === 'boss2';
           spawnEffect(e.x, e.y, isBoss ? '#ff4e39' : '#ff9f43', isBoss ? 40 : 20, isBoss ? 40 : 16);
-          const pickupChance = state.stageIndex === 2 ? 0.32 : 0.22;
+          const pickupChance = state.stageIndex === 2 ? 0.36 : 0.22;
           if (Math.random() < pickupChance && !isBoss) {
             let kind = 'power';
             const roll = Math.random();
-            if (roll > (state.stageIndex === 2 ? 0.74 : 0.82)) kind = 'bomb';
-            else if (roll > 0.5) kind = 'weapon';
+            if (roll > (state.stageIndex === 2 ? 0.79 : 0.82)) kind = 'bomb';
+            else if (roll > (state.stageIndex === 2 ? 0.44 : 0.5)) kind = 'weapon';
             const weaponRoll = Math.random();
             const weapon = weaponRoll > 0.66 ? 'spread' : weaponRoll > 0.33 ? 'laser' : 'homing';
             state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind, weapon });
@@ -1032,6 +1034,7 @@ function drawBossBar() {
 
 
 function drawHUD() {
+  const boss2 = state.enemies.find(e => e.type === 'boss2');
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(10, 10, 178, 164);
   ctx.fillStyle = '#d4ecff';
@@ -1054,6 +1057,23 @@ function drawHUD() {
   ctx.fillStyle = '#d4ecff';
   ctx.font = 'bold 12px sans-serif';
   ctx.fillText('ARMOR', W - 150, 14);
+
+  if (state.stageIndex === 2) {
+    const tag = boss2
+      ? (boss2.phase >= 4 ? 'STAGE 2 // FINAL STORM' : `STAGE 2 // PHASE ${boss2.phase}`)
+      : 'STAGE 2 // CRIMSON AIRSPACE';
+    ctx.fillStyle = boss2 && boss2.phase >= 4 ? 'rgba(120, 18, 28, 0.72)' : 'rgba(48, 22, 52, 0.6)';
+    ctx.fillRect(W - 246, 42, 212, 22);
+    ctx.strokeStyle = boss2 && boss2.phase >= 4 ? '#ff8f8f' : '#ff9de1';
+    ctx.strokeRect(W - 246, 42, 212, 22);
+    ctx.fillStyle = '#fff1de';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText(tag, W - 238, 57);
+    if (boss2 && boss2.phase >= 4) {
+      ctx.fillStyle = '#ffd27a';
+      ctx.fillText('DANGER: ROTATING RINGS', W - 238, 74);
+    }
+  }
 }
 
 function drawOverlay(title, subtitle, prompt) {
