@@ -25,6 +25,11 @@ const state = {
   stageBannerTimer: 0,
   victoryTimer: 0,
   rumble: 0,
+  freezeTimer: 0,
+  flashTimer: 0,
+  flashColor: '#ffffff',
+  announcerTimer: 0,
+  announcerText: '',
 };
 
 const player = {
@@ -154,6 +159,11 @@ function resetGame() {
   state.stageBannerTimer = STAGE_BANNER_DURATION;
   state.victoryTimer = 0;
   state.rumble = 0;
+  state.freezeTimer = 0;
+  state.flashTimer = 0;
+  state.flashColor = '#ffffff';
+  state.announcerTimer = 90;
+  state.announcerText = '作战开始';
   setMusicMode('stage');
   state.highScore = Number(localStorage.getItem('raidenClassicHighScore') || state.highScore || 0);
 
@@ -196,6 +206,36 @@ function spawnEffect(x, y, color = '#ff9d2e', size = 16, count = 8) {
       color,
     });
   }
+}
+
+function announce(text, duration = 90, color = '#9fd9ff') {
+  state.announcerText = text;
+  state.announcerTimer = duration;
+  state.flashColor = color;
+}
+
+function triggerFlash(color = '#ffffff', duration = 10, rumble = 0) {
+  state.flashColor = color;
+  state.flashTimer = Math.max(state.flashTimer, duration);
+  state.rumble = Math.max(state.rumble, rumble);
+}
+
+function clearEnemyBullets(intensity = 18) {
+  const bullets = state.enemyBullets.splice(0, state.enemyBullets.length);
+  for (const b of bullets) spawnEffect(b.x, b.y, '#ffd27a', 8, 4);
+  if (bullets.length) triggerFlash('#fff1b8', 6, intensity);
+}
+
+function enterBossPhase(boss, phase, text, opts = {}) {
+  boss.phase = phase;
+  boss.phaseIntro = false;
+  boss.fireTimer = opts.fireTimer ?? 38;
+  state.freezeTimer = Math.max(state.freezeTimer, opts.freeze ?? 18);
+  clearEnemyBullets(opts.rumble ?? 16);
+  triggerFlash(opts.color || '#ff8bd6', opts.flash ?? 12, opts.rumble ?? 16);
+  announce(text, opts.duration ?? 78, opts.color || '#ffd6ef');
+  playSfx('alarm');
+  spawnEffect(boss.x, boss.y, opts.color || '#ff7bd8', 42, opts.count ?? 26);
 }
 
 function shootPlayer() {
@@ -353,6 +393,8 @@ function spawnBoss() {
   playSfx('boss');
   playSfx('alarm');
   setMusicMode('boss');
+  announce(state.stageIndex === 1 ? 'Boss 接近中' : '警告：猩红风暴母舰入场', 110, state.stageIndex === 1 ? '#ffd47a' : '#ff9de1');
+  triggerFlash(state.stageIndex === 1 ? '#ffd47a' : '#ff9de1', 12, 12);
   if (state.stageIndex === 1) {
     state.enemies.push({
       type: 'boss',
@@ -386,6 +428,7 @@ function spawnBoss() {
       moveDir: 1,
       score: 14000,
       label: '第二关Boss：猩红风暴母舰',
+      phaseIntro: false,
     });
   }
 }
@@ -401,6 +444,9 @@ function startNextStage() {
   state.bullets = [];
   state.pickups = [];
   state.effects = [];
+  state.freezeTimer = 24;
+  triggerFlash('#8be6ff', 14, 14);
+  announce('STAGE 2 空域切换', 120, '#8be6ff');
   player.hp = Math.min(player.maxHp, player.hp + 35);
   player.bombs = Math.min(5, player.bombs + 1);
   player.invuln = Math.max(player.invuln, 120);
@@ -423,14 +469,28 @@ function updateStageSpawns() {
     return;
   }
 
-  if (state.stageTimer % 48 === 0 && state.stageTimer < 1780) spawnEnemy('drone');
-  if (state.stageTimer % 130 === 50 && state.stageTimer < 1650) spawnEnemy('fighter');
-  if (state.stageTimer % 190 === 100 && state.stageTimer < 1680) spawnEnemy('interceptor');
-  if ([260, 540, 860, 1180, 1500].includes(state.stageTimer)) spawnEnemy('turretShip');
-  if (state.stageTimer === 700) spawnEnemy('minibossA');
-  if (state.stageTimer === 1080) spawnEnemy('minibossB');
-  if (state.stageTimer === 1280 || state.stageTimer === 1440) spawnEnemy('interceptor');
-  if (state.stageTimer > 1980) {
+  if (state.stageTimer % 56 === 0 && state.stageTimer < 420) spawnEnemy('drone');
+  if (state.stageTimer % 96 === 40 && state.stageTimer < 420) spawnEnemy('fighter');
+
+  if (state.stageTimer >= 420 && state.stageTimer < 900) {
+    if (state.stageTimer % 72 === 0) spawnEnemy('drone');
+    if (state.stageTimer % 168 === 84) spawnEnemy('interceptor');
+    if ([520, 760].includes(state.stageTimer)) spawnEnemy('turretShip');
+  }
+
+  if (state.stageTimer === 660) spawnEnemy('minibossA');
+
+  if (state.stageTimer >= 920 && state.stageTimer < 1560) {
+    if (state.stageTimer % 68 === 0) spawnEnemy('drone');
+    if (state.stageTimer % 148 === 56) spawnEnemy('fighter');
+    if (state.stageTimer % 210 === 110) spawnEnemy('interceptor');
+    if ([980, 1220, 1460].includes(state.stageTimer)) spawnEnemy('turretShip');
+  }
+
+  if (state.stageTimer === 1180) spawnEnemy('minibossB');
+  if ([1340, 1500].includes(state.stageTimer)) spawnEnemy('interceptor');
+
+  if (state.stageTimer > 1840) {
     state.bossSpawned = true;
     spawnBoss();
   }
@@ -492,6 +552,13 @@ function update() {
 
   if (state.scene === 'paused') return;
   if (state.scene !== 'playing') return;
+
+  if (state.flashTimer > 0) state.flashTimer -= 1;
+  if (state.announcerTimer > 0) state.announcerTimer -= 1;
+  if (state.freezeTimer > 0) {
+    state.freezeTimer -= 1;
+    return;
+  }
 
   state.stageTimer += 1;
   if (state.stageBannerTimer > 0) state.stageBannerTimer -= 1;
@@ -668,45 +735,45 @@ function update() {
         e.y += 2.1;
       } else {
         e.patternTimer += 1;
-        e.x += e.moveDir * (e.phase >= 3 ? 2.6 : 2.0);
+        e.x += e.moveDir * (e.phase >= 3 ? 2.35 : 1.8);
         if (e.x < 96 || e.x > W - 96) e.moveDir *= -1;
-        if (e.hp < e.maxHp * 0.18) e.phase = 4;
-        else if (e.hp < e.maxHp * 0.42) e.phase = 3;
-        else if (e.hp < e.maxHp * 0.68) e.phase = 2;
+        if (e.phase === 1 && e.hp < e.maxHp * 0.68) enterBossPhase(e, 2, 'Boss2 Phase 2：副炮全开', { color: '#ff9de1', freeze: 16, fireTimer: 24, rumble: 16 });
+        else if (e.phase === 2 && e.hp < e.maxHp * 0.42) enterBossPhase(e, 3, 'Boss2 Phase 3：压制俯冲', { color: '#ffd27a', freeze: 20, fireTimer: 18, rumble: 20, count: 32 });
+        else if (e.phase === 3 && e.hp < e.maxHp * 0.18) enterBossPhase(e, 4, 'Boss2 Final：猩红风暴', { color: '#ff6b6b', freeze: 24, fireTimer: 14, rumble: 24, flash: 16, count: 36 });
         if (e.fireTimer <= 0) {
           if (e.phase === 1) {
             enemyShoot(e, 'wide');
             enemyShoot({ x: e.x - 44, y: e.y + 14 }, 'aim');
             enemyShoot({ x: e.x + 44, y: e.y + 14 }, 'aim');
-            e.fireTimer = 28;
+            e.fireTimer = 32;
           } else if (e.phase === 2) {
             enemyShoot(e, 'wide');
-            enemyShoot({ x: e.x - 56, y: e.y + 18 }, 'wide');
-            enemyShoot({ x: e.x + 56, y: e.y + 18 }, 'wide');
-            for (let i = 0; i < 5; i++) {
-              const angle = (-0.9 + i * 0.45) + Math.PI / 2;
-              state.enemyBullets.push({ x: e.x, y: e.y + 20, vx: Math.cos(angle) * 3.2, vy: Math.sin(angle) * 3.2, r: 5, color: '#ff76e1', damage: 13 });
+            enemyShoot({ x: e.x - 56, y: e.y + 18 }, 'spread');
+            enemyShoot({ x: e.x + 56, y: e.y + 18 }, 'spread');
+            for (let i = 0; i < 4; i++) {
+              const angle = (-0.72 + i * 0.48) + Math.PI / 2;
+              state.enemyBullets.push({ x: e.x, y: e.y + 20, vx: Math.cos(angle) * 3.0, vy: Math.sin(angle) * 3.0, r: 5, color: '#ff76e1', damage: 13 });
             }
-            e.fireTimer = 18;
+            e.fireTimer = 22;
           } else if (e.phase === 3) {
             for (let i = 0; i < 2; i++) {
               const originX = e.x + (i === 0 ? -60 : 60);
               enemyShoot({ x: originX, y: e.y + 18 }, 'wide');
-              enemyShoot({ x: originX, y: e.y + 18 }, 'spread');
+              enemyShoot({ x: originX, y: e.y + 18 }, 'aim');
             }
             enemyShoot(e, 'aim');
-            state.enemyBullets.push({ x: e.x, y: e.y + 28, vx: 0, vy: 5.6, r: 8, color: '#ffd54f', damage: 20 });
-            e.fireTimer = 12;
+            state.enemyBullets.push({ x: e.x, y: e.y + 28, vx: 0, vy: 5.0, r: 7, color: '#ffd54f', damage: 18 });
+            e.fireTimer = 16;
           } else {
             for (let ring = 0; ring < 2; ring++) {
-              for (let i = 0; i < 8; i++) {
-                const angle = (e.patternTimer * 0.08) + ring * 0.22 + i * (Math.PI * 2 / 8);
-                state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * (2.4 + ring * 0.7), vy: Math.sin(angle) * (2.4 + ring * 0.7), r: 5, color: ring === 0 ? '#ff4fd8' : '#ffd54f', damage: 15 });
+              for (let i = 0; i < 7; i++) {
+                const angle = (e.patternTimer * 0.075) + ring * 0.26 + i * (Math.PI * 2 / 7);
+                state.enemyBullets.push({ x: e.x, y: e.y + 24, vx: Math.cos(angle) * (2.2 + ring * 0.6), vy: Math.sin(angle) * (2.2 + ring * 0.6), r: 5, color: ring === 0 ? '#ff4fd8' : '#ffd54f', damage: 15 });
               }
             }
             enemyShoot({ x: e.x - 64, y: e.y + 10 }, 'aim');
             enemyShoot({ x: e.x + 64, y: e.y + 10 }, 'aim');
-            e.fireTimer = 10;
+            e.fireTimer = 12;
           }
         }
       }
@@ -735,11 +802,12 @@ function update() {
           state.score += e.score;
           const isBoss = e.type === 'boss' || e.type === 'boss2';
           spawnEffect(e.x, e.y, isBoss ? '#ff4e39' : '#ff9f43', isBoss ? 40 : 20, isBoss ? 40 : 16);
-          if (Math.random() < 0.22 && !isBoss) {
+          const pickupChance = state.stageIndex === 2 ? 0.32 : 0.22;
+          if (Math.random() < pickupChance && !isBoss) {
             let kind = 'power';
             const roll = Math.random();
-            if (roll > 0.82) kind = 'bomb';
-            else if (roll > 0.58) kind = 'weapon';
+            if (roll > (state.stageIndex === 2 ? 0.74 : 0.82)) kind = 'bomb';
+            else if (roll > 0.5) kind = 'weapon';
             const weaponRoll = Math.random();
             const weapon = weaponRoll > 0.66 ? 'spread' : weaponRoll > 0.33 ? 'laser' : 'homing';
             state.pickups.push({ x: e.x, y: e.y, vy: 1.4, kind, weapon });
@@ -1017,9 +1085,15 @@ function render() {
   ctx.setTransform(1, 0, 0, 1, shakeX, shakeY);
 
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#163969');
-  bg.addColorStop(0.45, '#0a1730');
-  bg.addColorStop(1, '#03070f');
+  if (state.stageIndex === 1) {
+    bg.addColorStop(0, '#163969');
+    bg.addColorStop(0.45, '#0a1730');
+    bg.addColorStop(1, '#03070f');
+  } else {
+    bg.addColorStop(0, '#53233e');
+    bg.addColorStop(0.42, '#261328');
+    bg.addColorStop(1, '#06070f');
+  }
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
@@ -1028,9 +1102,15 @@ function render() {
     ctx.fillRect(s.x, s.y, s.size, s.size);
   }
 
-  ctx.fillStyle = 'rgba(65, 120, 205, 0.18)';
+  ctx.fillStyle = state.stageIndex === 1 ? 'rgba(65, 120, 205, 0.18)' : 'rgba(255, 76, 160, 0.14)';
   for (let i = 0; i < 5; i++) {
     ctx.fillRect(40 + i * 90, (state.time * (1.5 + i * 0.1)) % (H + 120) - 120, 8, 120);
+  }
+  if (state.stageIndex === 2) {
+    ctx.fillStyle = 'rgba(255, 164, 96, 0.08)';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(20 + i * 110, 80 + ((state.time * 0.9 + i * 120) % (H + 160)) - 160, 44, 80);
+    }
   }
 
   for (const p of state.pickups) {
@@ -1095,11 +1175,34 @@ function render() {
   drawHUD();
   drawBossBar();
 
+  if (state.scene === 'playing' && state.announcerTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, state.announcerTimer / 24);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(W / 2 - 160, 94, 320, 34);
+    ctx.strokeStyle = state.flashColor;
+    ctx.strokeRect(W / 2 - 160, 94, 320, 34);
+    ctx.fillStyle = '#fff6de';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(state.announcerText, W / 2, 117);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
   if (state.scene === 'playing' && state.stageBannerTimer > 0) {
     const alpha = Math.min(1, state.stageBannerTimer / STAGE_BANNER_DURATION + 0.15);
     ctx.save();
     ctx.globalAlpha = alpha;
     drawOverlay(`STAGE ${state.stageIndex}`, state.stageIndex === 1 ? '突入外层防线' : '进入火山云海空域', state.stageIndex === 1 ? '清理杂兵并击落空中要塞' : '敌军主力舰队开始反扑');
+    ctx.restore();
+  }
+
+  if (state.flashTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.5, state.flashTimer / 18);
+    ctx.fillStyle = state.flashColor;
+    ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
 
@@ -1161,5 +1264,15 @@ canvas.addEventListener('mouseup', (e) => {
   if (e.button === 0) state.mouse.firing = false;
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+window.__raidenDebug = {
+  state,
+  player,
+  resetGame,
+  spawnBoss,
+  startNextStage,
+  announce,
+  clearEnemyBullets,
+};
 
 loop();
